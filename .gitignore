@@ -8,3 +8,7 @@
 src/*.o
 src/*.so
 src/*.dll
+.DS_Store
+renv/library/
+renv/staging/
+.Rprofile.user
