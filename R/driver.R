@@ -58,6 +58,70 @@ setMethod("dbDataType", "SnowflakeDriver", function(dbObj, obj, ...) {
   r_to_sf_type(obj)
 })
 
+#' Merge dbConnect() arguments with Workspace auto-detection and
+#' connections.toml
+#'
+#' Kept separate from dbConnect() so that this resolution -- including
+#' reading `profile$token` from connections.toml, the P1-02 fix -- is
+#' testable without a live account. dbConnect() itself still needs one, to
+#' run its validation query.
+#' @returns list(account, user, database, schema, warehouse, role,
+#'   authenticator, private_key_path, profile_token, profile_token_file).
+#' @noRd
+.resolve_connect_params <- function(account, user, token, private_key_path,
+                                     authenticator, database, schema,
+                                     warehouse, role, name) {
+  # Workspace Notebook auto-detection (env var, token file, or host)
+  if (is.null(token) && is.null(account) && .is_workspace()) {
+    account   <- .resolve_workspace_account()
+    database  <- if (nzchar(database))  database  else Sys.getenv("SNOWFLAKE_DATABASE", "")
+    schema    <- if (nzchar(schema))    schema    else Sys.getenv("SNOWFLAKE_SCHEMA", "")
+    warehouse <- if (nzchar(warehouse)) warehouse else Sys.getenv("SNOWFLAKE_WAREHOUSE", "")
+    role      <- if (nzchar(role))      role      else Sys.getenv("SNOWFLAKE_ROLE", "")
+    user      <- user %||% Sys.getenv("SNOWFLAKE_USER", "")
+  }
+
+  # Resolve parameters from connections.toml if not given explicitly.
+  #
+  # Read even when account is already known, as long as a profile name
+  # was given explicitly: dbConnect(account = ..., name = "workbench")
+  # must still pick up that profile's token, or profile$token stays
+  # unreachable whenever a caller pins the account and relies on `name`
+  # for credentials -- exactly the Posit Workbench / Native App shape.
+  # Not widened to "whenever token is missing": that would merge in a
+  # same-named default profile's credentials for an account the caller
+  # never asked it for.
+  profile_token <- NULL
+  profile_token_file <- NULL
+  profile_token_name <- NULL
+  if (is.null(account) || !is.null(name)) {
+    profile <- sf_read_connections_toml(name)
+    if (!is.null(profile)) {
+      account          <- account %||% profile$account
+      user             <- user %||% profile$user
+      authenticator    <- authenticator %||% profile$authenticator
+      private_key_path <- private_key_path %||% profile$private_key_path
+      database         <- if (nzchar(database)) database else (profile$database %||% "")
+      schema           <- if (nzchar(schema)) schema else (profile$schema %||% "")
+      warehouse        <- if (nzchar(warehouse)) warehouse else (profile$warehouse %||% "")
+      role             <- if (nzchar(role)) role else (profile$role %||% "")
+      if (is.null(token) && !is.null(profile$token) && nzchar(profile$token)) {
+        profile_token      <- profile$token
+        profile_token_file <- attr(profile, "toml_file")
+        profile_token_name <- attr(profile, "toml_name")
+      }
+    }
+  }
+
+  list(
+    account = account, user = user, database = database, schema = schema,
+    warehouse = warehouse, role = role, authenticator = authenticator,
+    private_key_path = private_key_path,
+    profile_token = profile_token, profile_token_file = profile_token_file,
+    profile_token_name = profile_token_name
+  )
+}
+
 #' @rdname SnowflakeDriver-class
 #' @param drv A SnowflakeDriver, or missing (uses default).
 #' @param account Snowflake account identifier (e.g. "myaccount").
@@ -78,30 +142,20 @@ setMethod("dbConnect", "SnowflakeDriver",
            database = "", schema = "", warehouse = "", role = "",
            name = NULL, ...) {
 
-    # Workspace Notebook auto-detection (env var, token file, or host)
-    if (is.null(token) && is.null(account) && .is_workspace()) {
-      account   <- .resolve_workspace_account()
-      database  <- if (nzchar(database))  database  else Sys.getenv("SNOWFLAKE_DATABASE", "")
-      schema    <- if (nzchar(schema))    schema    else Sys.getenv("SNOWFLAKE_SCHEMA", "")
-      warehouse <- if (nzchar(warehouse)) warehouse else Sys.getenv("SNOWFLAKE_WAREHOUSE", "")
-      role      <- if (nzchar(role))      role      else Sys.getenv("SNOWFLAKE_ROLE", "")
-      user      <- user %||% Sys.getenv("SNOWFLAKE_USER", "")
-    }
-
-    # Resolve parameters from connections.toml if not given explicitly
-    if (is.null(account)) {
-      profile <- sf_read_connections_toml(name)
-      if (!is.null(profile)) {
-        account          <- account %||% profile$account
-        user             <- user %||% profile$user
-        authenticator    <- authenticator %||% profile$authenticator
-        private_key_path <- private_key_path %||% profile$private_key_path
-        database         <- if (nzchar(database)) database else (profile$database %||% "")
-        schema           <- if (nzchar(schema)) schema else (profile$schema %||% "")
-        warehouse        <- if (nzchar(warehouse)) warehouse else (profile$warehouse %||% "")
-        role             <- if (nzchar(role)) role else (profile$role %||% "")
-      }
-    }
+    resolved <- .resolve_connect_params(
+      account = account, user = user, token = token,
+      private_key_path = private_key_path, authenticator = authenticator,
+      database = database, schema = schema, warehouse = warehouse,
+      role = role, name = name
+    )
+    account          <- resolved$account
+    user             <- resolved$user
+    database         <- resolved$database
+    schema           <- resolved$schema
+    warehouse        <- resolved$warehouse
+    role             <- resolved$role
+    authenticator    <- resolved$authenticator
+    private_key_path <- resolved$private_key_path
 
     if (is.null(account) || !nzchar(account)) {
       cli_abort(c(
@@ -115,7 +169,10 @@ setMethod("dbConnect", "SnowflakeDriver",
       user = user,
       token = token,
       private_key_path = private_key_path,
-      authenticator = authenticator
+      authenticator = authenticator,
+      profile_token = resolved$profile_token,
+      profile_token_file = resolved$profile_token_file,
+      profile_token_name = resolved$profile_token_name
     )
 
     con <- new("SnowflakeConnection",
@@ -128,6 +185,12 @@ setMethod("dbConnect", "SnowflakeDriver",
       .auth     = auth,
       .state    = .new_conn_state()
     )
+
+    # Seed the live token cache -- see .new_conn_state() and .try_refresh_token().
+    con@.state$token <- auth$token
+    if (!is.null(auth$token_file)) {
+      con@.state$token_mtime <- .file_mtime(auth$token_file)
+    }
 
     # Optionally establish a persistent session for transactions & internal protocol
     use_session <- isTRUE(getOption("RSnowflake.use_session", FALSE))

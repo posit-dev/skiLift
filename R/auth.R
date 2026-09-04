@@ -7,7 +7,8 @@
 #' `token_type` (the value for the X-Snowflake-Authorization-Token-Type header).
 #'
 #' Priority order:
-#' 1. Explicit bearer token (the `token` parameter)
+#' 1. Explicit bearer token (the `token` parameter) -- always a PAT; a
+#'    caller who wants OAuth semantics goes through the profile instead
 #' 2. Workspace SPCS OAuth token (SNOWFLAKE_HOST set + token file exists) --
 #'    all official Snowflake drivers accept this token when connecting via
 #'    the internal SPCS gateway.  Returns type = "oauth" so that ADBC maps
@@ -16,17 +17,43 @@
 #' 4. Key-pair JWT (private_key_path + account + user)
 #' 5. Workspace session token fallback (SNOWFLAKE_TOKEN env var or token
 #'    file without SNOWFLAKE_HOST) -- legacy path.
+#' 6. connections.toml OAuth profile (e.g. Posit Workbench / the Native App,
+#'    which write a short-lived OAuth token into the profile rather than
+#'    exposing SNOWFLAKE_HOST or a session-token file) -- local, so it is
+#'    last, after every ambient-environment check has had a chance to fire.
 #'
 #' @param account Account identifier.
 #' @param user Username.
 #' @param token Explicit bearer token.
 #' @param private_key_path Path to PEM private key file.
 #' @param authenticator Auth method string.
-#' @returns A list with `type` ("oauth", "jwt", "pat", "token") and `token`.
+#' @param profile_token OAuth token read from a connections.toml profile,
+#'   if the caller resolved one and no higher-priority credential exists.
+#' @param profile_token_file Path to the connections.toml the profile came
+#'   from, so a rotated token can be re-read from the same place.
+#' @param profile_token_name The profile's name within that file (its
+#'   `toml_name` attribute), so a refresh can re-select the same profile
+#'   after re-parsing rather than guessing at the default again.
+#' @returns A list with `type` ("oauth", "jwt", "pat", "token"), `token`,
+#'   and -- for tokens that rotate -- `token_file` (the path to re-read)
+#'   and `token_source`. `token_source` matters because `token_file`
+#'   means two different things: for a Workspace bare-token file
+#'   (`/snowflake/session/token`) the whole file *is* the token, so a raw
+#'   read is right; for a connections.toml OAuth profile, `token_file` is
+#'   the path to the whole TOML document, and refreshing means re-parsing
+#'   it and re-selecting `token_profile`, not reading it raw -- see
+#'   `.read_token_from_source()` in api.R. Workspace/SPCS OAuth
+#'   additionally sets `host_eligible = TRUE`; this is what `sf_host()`
+#'   requires before routing to `SNOWFLAKE_HOST` -- a toml-sourced OAuth
+#'   token is `type == "oauth"` too, but is meant for the public
+#'   endpoint, not the internal gateway, so it must not carry that flag.
 #' @noRd
 sf_auth_resolve <- function(account, user = NULL, token = NULL,
                             private_key_path = NULL,
-                            authenticator = NULL) {
+                            authenticator = NULL,
+                            profile_token = NULL,
+                            profile_token_file = NULL,
+                            profile_token_name = NULL) {
   # Priority 1: Explicit bearer token
   if (!is.null(token) && nzchar(token)) {
     return(list(
@@ -38,12 +65,15 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
 
   # Priority 2: Workspace SPCS OAuth -- preferred when inside SPCS container
   if (nzchar(Sys.getenv("SNOWFLAKE_HOST", ""))) {
-    ws_token <- .read_workspace_token()
-    if (nzchar(ws_token)) {
+    ws <- .read_workspace_token()
+    if (nzchar(ws$token)) {
       return(list(
         type = "oauth",
-        token = ws_token,
-        token_type = "OAUTH"
+        token = ws$token,
+        token_type = "OAUTH",
+        token_file = ws$file,
+        token_source = "file",
+        host_eligible = TRUE
       ))
     }
   }
@@ -86,12 +116,31 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
   }
 
   # Priority 5: Workspace session token fallback (no SNOWFLAKE_HOST)
-  ws_token <- .read_workspace_token()
-  if (nzchar(ws_token)) {
+  ws <- .read_workspace_token()
+  if (nzchar(ws$token)) {
     return(list(
       type = "token",
-      token = ws_token,
-      token_type = "OAUTH"
+      token = ws$token,
+      token_type = "OAUTH",
+      token_file = ws$file,
+      token_source = "file"
+    ))
+  }
+
+  # Priority 6: connections.toml OAuth profile -- Posit Workbench / the
+  # Native App write a short-lived OAuth token directly into the profile;
+  # there is no SNOWFLAKE_HOST and no session-token file to find it by.
+  # host_eligible is deliberately not set: this token is for the public
+  # endpoint, never the internal SPCS gateway. token_source = "toml" is
+  # what tells refresh to re-parse token_file rather than read it raw.
+  if (!is.null(profile_token) && nzchar(profile_token) && auth_lower == "oauth") {
+    return(list(
+      type = "oauth",
+      token = profile_token,
+      token_type = "OAUTH",
+      token_file = profile_token_file,
+      token_source = "toml",
+      token_profile = profile_token_name
     ))
   }
 
@@ -110,17 +159,21 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
 # ---------------------------------------------------------------------------
 
 #' Read the session token from env var or /snowflake/session/token file
-#' @returns Token string (possibly empty).
+#'
+#' Also reports which file (if any) the token came from, so refresh can
+#' re-read the same source and stat it for rotation ahead of a 401.
+#' @returns list(token = <chr, possibly empty>, file = <path or NULL>).
 #' @noRd
 .read_workspace_token <- function() {
   tok <- Sys.getenv("SNOWFLAKE_TOKEN", "")
-  if (nzchar(tok)) return(tok)
+  if (nzchar(tok)) return(list(token = tok, file = NULL))
 
   token_file <- "/snowflake/session/token"
   if (file.exists(token_file)) {
     tok <- trimws(paste(readLines(token_file, warn = FALSE), collapse = ""))
+    if (nzchar(tok)) return(list(token = tok, file = token_file))
   }
-  tok
+  list(token = "", file = NULL)
 }
 
 #' Detect whether we are running inside a Snowflake Workspace Notebook
@@ -164,7 +217,11 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
 #' Read a connection profile from connections.toml
 #'
 #' @param name Profile name, or NULL for default.
-#' @returns Named list of connection parameters, or NULL.
+#' @returns Named list of connection parameters, or NULL. The list carries
+#'   `toml_file` and `toml_name` attributes recording where it came from and
+#'   which profile was selected -- rotation (`.refresh_token_if_stale()`)
+#'   needs the path, and diagnostics benefit from the name being explicit
+#'   rather than re-derived.
 #' @noRd
 sf_read_connections_toml <- function(name = NULL) {
   toml_dir <- Sys.getenv("SNOWFLAKE_HOME",
@@ -184,22 +241,30 @@ sf_read_connections_toml <- function(name = NULL) {
   )
   if (is.null(toml) || length(toml) == 0L) return(NULL)
 
+  selected_name <- NULL
+  profile <- NULL
+
   if (!is.null(name) && name %in% names(toml)) {
-    return(toml[[name]])
-  }
-  if ("default" %in% names(toml)) {
-    return(toml[["default"]])
-  }
-  if (length(toml) == 1L) {
-    return(toml[[1L]])
+    selected_name <- name
+    profile <- toml[[name]]
+  } else if ("default" %in% names(toml)) {
+    selected_name <- "default"
+    profile <- toml[["default"]]
+  } else if (length(toml) == 1L) {
+    selected_name <- names(toml)[[1L]]
+    profile <- toml[[1L]]
+  } else {
+    selected_name <- names(toml)[[1L]]
+    cli_inform(c(
+      "i" = "Using first profile {.val {selected_name}} from {.file connections.toml}.",
+      "i" = "Pass {.arg name} to select a specific profile."
+    ))
+    profile <- toml[[1L]]
   }
 
-  first <- names(toml)[[1L]]
-  cli_inform(c(
-    "i" = "Using first profile {.val {first}} from {.file connections.toml}.",
-    "i" = "Pass {.arg name} to select a specific profile."
-  ))
-  toml[[1L]]
+  attr(profile, "toml_file") <- toml_file
+  attr(profile, "toml_name") <- selected_name
+  profile
 }
 
 #' Minimal TOML parser for simple key=value sections

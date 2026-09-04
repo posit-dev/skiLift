@@ -72,6 +72,8 @@ sf_api_cancel <- function(con, handle) {
 # ---------------------------------------------------------------------------
 
 .sf_api_request_with_refresh <- function(con, method, url, body = NULL) {
+  .refresh_token_if_stale(con)
+
   resp <- .sf_api_request_raw(con, method, url, body)
   status <- httr2::resp_status(resp)
 
@@ -86,7 +88,71 @@ sf_api_cancel <- function(con, handle) {
   .handle_response(resp, url)
 }
 
+#' Re-read a file-sourced token if the source file has changed on disk
+#'
+#' Workspace / Native App platforms have been observed rotating the token
+#' file well inside its own lifetime (~5 min against a 600s TTL). Stating the
+#' file first is one syscall and avoids a wasted round trip through the
+#' 401-retry on every rotation. Tokens sourced from an env var, or types with
+#' no file (jwt, pat, explicit), have nothing to stat and fall through to the
+#' 401-retry backstop instead.
+#' @returns invisible(NULL). Updates con@.state on change.
+#' @noRd
+.refresh_token_if_stale <- function(con) {
+  auth <- con@.auth
+  if (!(auth$type %in% c("token", "oauth")) || is.null(auth$token_file)) {
+    return(invisible(NULL))
+  }
+
+  current_mtime <- .file_mtime(auth$token_file)
+  cached_mtime  <- con@.state$token_mtime
+  if (!is.na(current_mtime) && !is.null(cached_mtime) &&
+        !is.na(cached_mtime) && current_mtime <= cached_mtime) {
+    return(invisible(NULL))
+  }
+
+  new_token <- .read_token_from_source(auth)
+  if (!is.null(new_token) && nzchar(new_token)) {
+    con@.state$token       <- new_token
+    con@.state$token_mtime <- current_mtime
+  }
+  invisible(NULL)
+}
+
+#' Re-read a token from wherever `auth` says it came from
+#'
+#' `token_file` means different things for different sources: for a
+#' Workspace bare-token file (`/snowflake/session/token`) the file's
+#' entire content *is* the token, so a raw read is correct. For a
+#' connections.toml OAuth profile, `token_file` is the path to the whole
+#' TOML document -- reading it raw would hand the wire a token string
+#' that is literally the file's account/authenticator/token lines
+#' concatenated together, which is exactly the 390146 "Bearer token is
+#' missing" failure this fixes. `token_source == "toml"` routes through
+#' the real parser and re-selects the same profile by name instead.
+#' @returns Character token, or NULL if it could not be re-read.
+#' @noRd
+.read_token_from_source <- function(auth) {
+  if (identical(auth$token_source, "toml")) {
+    profile <- sf_read_connections_toml(auth$token_profile)
+    return(profile$token)
+  }
+  trimws(paste(readLines(auth$token_file, warn = FALSE), collapse = ""))
+}
+
+#' @returns Numeric mtime, or NA if `path` is NULL or missing.
+#' @noRd
+.file_mtime <- function(path) {
+  if (is.null(path) || !file.exists(path)) return(NA_real_)
+  as.numeric(file.mtime(path))
+}
+
 #' Attempt to refresh the auth token
+#'
+#' Writes into `con@.state`, not `con@.auth` -- `.auth` is a plain S4 list
+#' slot (value-copied), so a write there is discarded on return and the
+#' caller's retry would resend the stale token. `.state` is an environment
+#' slot, so this mutation is visible to the caller.
 #' @returns TRUE if token was refreshed, FALSE otherwise.
 #' @noRd
 .try_refresh_token <- function(con) {
@@ -95,18 +161,30 @@ sf_api_cancel <- function(con, handle) {
   if (auth$type == "jwt") {
     return(tryCatch({
       new_jwt <- sf_generate_jwt(auth$account, auth$user, auth$private_key_path)
-      con@.auth$token <- new_jwt
-      con@.auth$generated_at <- Sys.time()
+      con@.state$token       <- new_jwt
+      con@.state$token_mtime <- as.numeric(Sys.time())
       TRUE
     }, error = function(e) FALSE))
   }
 
-  if (auth$type %in% c("token", "oauth")) {
-    old_token <- auth$token
-    new_token <- .read_workspace_token()
-    token_changed <- nzchar(new_token) && new_token != old_token
+  if (identical(auth$token_source, "toml")) {
+    old_token <- con@.state$token %||% auth$token
+    new_token <- .read_token_from_source(auth)
+    token_changed <- !is.null(new_token) && nzchar(new_token) && new_token != old_token
     if (token_changed) {
-      con@.auth$token <- new_token
+      con@.state$token       <- new_token
+      con@.state$token_mtime <- .file_mtime(auth$token_file)
+    }
+    return(token_changed)
+  }
+
+  if (auth$type %in% c("token", "oauth")) {
+    old_token <- con@.state$token %||% auth$token
+    ws <- .read_workspace_token()
+    token_changed <- nzchar(ws$token) && ws$token != old_token
+    if (token_changed) {
+      con@.state$token       <- ws$token
+      con@.state$token_mtime <- .file_mtime(ws$file)
     }
     return(token_changed)
   }
@@ -121,7 +199,9 @@ sf_api_cancel <- function(con, handle) {
 
 .sf_api_request_raw <- function(con, method, url, body = NULL) {
   auth <- con@.auth
-  token <- auth$token
+  # .state$token is the live copy -- see .try_refresh_token() -- and is only
+  # unset for connections predating this cache (e.g. hand-built in tests).
+  token <- con@.state$token %||% auth$token
   token_type <- auth$token_type %||% "KEYPAIR_JWT"
 
   req <- httr2::request(url) |>

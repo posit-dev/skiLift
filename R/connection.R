@@ -15,7 +15,8 @@
 #' @slot warehouse Default warehouse.
 #' @slot role Default role.
 #' @slot .auth Auth list (type, token, token_type, plus params for refresh).
-#' @slot .state Environment holding mutable state (valid, in_transaction, session_info).
+#' @slot .state Environment holding mutable state (valid, in_transaction,
+#'   session_info, and the live auth token cache -- token, token_mtime).
 #' @export
 setClass("SnowflakeConnection",
   contains = "DBIConnection",
@@ -37,6 +38,11 @@ setClass("SnowflakeConnection",
   env$in_transaction <- FALSE
   env$session_info   <- NULL
   env$adbc           <- NULL
+  # Live auth token cache. .auth is an S4 slot (value-copied), so a refresh
+  # written there never reaches the caller -- this environment is the
+  # reference-semantics home for the token that actually goes on the wire.
+  env$token          <- NULL
+  env$token_mtime    <- NULL
   env
 }
 
