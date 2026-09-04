@@ -1,8 +1,8 @@
 ---
-title: "RSnowflake in Snowflake Workspace Notebooks"
+title: "skiLift in Snowflake Workspace Notebooks"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{RSnowflake in Snowflake Workspace Notebooks}
+  %\VignetteIndexEntry{skiLift in Snowflake Workspace Notebooks}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -15,26 +15,26 @@ knitr::opts_chunk$set(
 )
 ```
 
-This vignette focuses on **Snowflake Workspace Notebooks**: how RSnowflake
+This vignette focuses on **Snowflake Workspace Notebooks**: how skiLift
 fits the Python + `%%R` model, what to install first, and how **ADBC**
 (`adbcsnowflake`) behaves behind the internal SPCS gateway. For general DBI
-usage and authentication modes, see **`vignette("getting-started", package = "RSnowflake")`**.
+usage and authentication modes, see **`vignette("getting-started", package = "skiLift")`**.
 
 ## Execution model
 
 1. The **Python kernel** holds the Snowpark session Workspace creates for you.
-2. **`%%R` cells** run R via rpy2; RSnowflake in R uses HTTPS like anywhere else.
+2. **`%%R` cells** run R via rpy2; skiLift in R uses HTTPS like anywhere else.
 3. **`dbConnect(Snowflake())`** in R succeeds when the environment variables
    Workspace / `setup_notebook()` export are present (see the getting-started
    vignette, **Snowflake Workspace Notebooks** section).
 
 Run your **Python bootstrap** (for example `setup_notebook()` from
-`sfnb_setup.py`) **before** the first `%%R` cell that loads RSnowflake.
+`sfnb_setup.py`) **before** the first `%%R` cell that loads skiLift.
 
 ## Optional ADBC (`adbcsnowflake`)
 
 ADBC is **optional**. When **`adbcsnowflake`** and **`adbcdrivermanager`**
-are installed, RSnowflake can use Arrow-native paths for reads and bulk
+are installed, skiLift can use Arrow-native paths for reads and bulk
 writes. Building `adbcsnowflake` requires a **Go compiler** on the machine
 where `install.packages()` runs.
 
@@ -52,26 +52,26 @@ toolkit.
 
 ## Internal SPCS gateway (`SNOWFLAKE_HOST`)
 
-From Workspace containers, RSnowflake and ADBC can use the **internal**
+From Workspace containers, skiLift and ADBC can use the **internal**
 gateway (`SNOWFLAKE_HOST`) with the container **OAuth** token. You do **not**
 need the public `*.snowflakecomputing.com` URL for routine Snowflake traffic
 when the session is wired correctly.
 
 Bulk write routing (`upload_method = "auto"`, thresholds, fallbacks) is
-described in **`vignette("getting-started", package = "RSnowflake")`**
+described in **`vignette("getting-started", package = "skiLift")`**
 (**Bulk Write Methods**). Tuning options use R options such as
-`RSnowflake.upload_method` and `RSnowflake.bulk_write_threshold`.
+`skiLift.upload_method` and `skiLift.bulk_write_threshold`.
 
 ## Deep dive and benchmarks
 
 The authoritative engineering note for Workspace + ADBC (architecture,
 redirect chains, benchmarks, PAT fallbacks for **external** hosts) ships in
-the RSnowflake repository as **`WORKSPACE_ADBC.md`**:
+the skiLift repository as **`WORKSPACE_ADBC.md`**:
 
-https://github.com/Snowflake-Labs/RSnowflake/blob/main/WORKSPACE_ADBC.md
+https://github.com/posit-dev/skiLift/blob/main/WORKSPACE_ADBC.md
 
 ## Companion ML workflows
 
-If you use **snowflakeR** in the same notebook, DBI access from R can share
-credentials via `snowflakeR::sfr_dbi_connection()`. See
-**`vignette("workspace-notebooks", package = "snowflakeR")`**.
+If you use **skiPatrol** in the same notebook, DBI access from R can share
+credentials via `skiPatrol::sfr_dbi_connection()`. See
+**`vignette("workspace-notebooks", package = "skiPatrol")`**.

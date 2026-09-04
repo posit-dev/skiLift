@@ -4,7 +4,7 @@ R Environment Helpers for Snowflake Workspace Notebooks
 DERIVED COPY -- Do not edit directly.
   The canonical source is:
     snowflake-notebook-multilang/src/sfnb_multilang/helpers/r_helpers.py
-  Edit there, then copy here. The sync script (sync_rsnowflake_to_public.sh)
+  Edit there, then copy here. The sync script (sync_skilift_to_public.sh)
   handles this automatically for public repo pushes.
 
 This module provides helper functions for:

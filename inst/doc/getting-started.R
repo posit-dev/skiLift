@@ -9,12 +9,12 @@ knitr::opts_chunk$set(
 ## ----install------------------------------------------------------------------
 # From GitHub (development version):
 # install.packages("pak")
-pak::pak("Snowflake-Labs/RSnowflake")
+pak::pak("posit-dev/skiLift")
 
 
 ## ----connect-toml-------------------------------------------------------------
 library(DBI)
-library(RSnowflake)
+library(skiLift)
 
 con <- dbConnect(Snowflake())
 
@@ -67,11 +67,11 @@ dbRemoveTable(con, "iris_copy")
 
 ## ----upload-method------------------------------------------------------------
 # Force a specific method
-options(RSnowflake.upload_method = "snowpark")
+options(skiLift.upload_method = "snowpark")
 dbWriteTable(con, "big_table", large_df)
 
 # Adjust the threshold (cells = rows * cols)
-options(RSnowflake.bulk_write_threshold = 100000L)
+options(skiLift.bulk_write_threshold = 100000L)
 
 
 ## ----case-upper---------------------------------------------------------------
@@ -81,7 +81,7 @@ dbListFields(con, "my_table")
 
 
 ## ----case-preserve------------------------------------------------------------
-options(RSnowflake.identifier_case = "preserve")
+options(skiLift.identifier_case = "preserve")
 
 dbWriteTable(con, "my_table", data.frame(id = 1, name = "Alice"), overwrite = TRUE)
 dbListFields(con, "my_table")
@@ -95,9 +95,9 @@ cat("ADBC available:", has_adbc, "\n")
 
 # ADBC is used automatically in 'auto' mode for large writes
 # Force it for reads:
-options(RSnowflake.backend = "adbc")
+options(skiLift.backend = "adbc")
 df <- dbGetQuery(con, "SELECT * FROM big_table")
-options(RSnowflake.backend = "auto")
+options(skiLift.backend = "auto")
 
 
 ## ----arrow--------------------------------------------------------------------

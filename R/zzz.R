@@ -15,21 +15,21 @@
   bulk_threshold <- if (in_workspace) 200000L else 50000L
 
   op_rsf <- list(
-    RSnowflake.timeout              = 600L,
-    RSnowflake.retry_max            = 3L,
-    RSnowflake.result_format        = "json",
-    RSnowflake.insert_batch_size    = 16384L,
-    RSnowflake.upload_method        = "auto",
-    RSnowflake.identifier_case      = "upper",
-    RSnowflake.use_simdjson         = TRUE,
-    RSnowflake.parallel_fetch       = TRUE,
-    RSnowflake.fetch_workers        = 0L,
-    RSnowflake.use_session          = FALSE,
-    RSnowflake.use_native_arrow     = FALSE,
-    RSnowflake.verbose              = FALSE,
-    RSnowflake.backend              = "auto",
-    RSnowflake.bulk_write_threshold = bulk_threshold,
-    RSnowflake.adbc_write_threshold = bulk_threshold
+    skiLift.timeout              = 600L,
+    skiLift.retry_max            = 3L,
+    skiLift.result_format        = "json",
+    skiLift.insert_batch_size    = 16384L,
+    skiLift.upload_method        = "auto",
+    skiLift.identifier_case      = "upper",
+    skiLift.use_simdjson         = TRUE,
+    skiLift.parallel_fetch       = TRUE,
+    skiLift.fetch_workers        = 0L,
+    skiLift.use_session          = FALSE,
+    skiLift.use_native_arrow     = FALSE,
+    skiLift.verbose              = FALSE,
+    skiLift.backend              = "auto",
+    skiLift.bulk_write_threshold = bulk_threshold,
+    skiLift.adbc_write_threshold = bulk_threshold
   )
   toset <- !(names(op_rsf) %in% names(op))
   if (any(toset)) options(op_rsf[toset])
@@ -41,7 +41,7 @@
 
 #' Apply identifier case policy
 #'
-#' When `RSnowflake.identifier_case` is `"upper"` (the default), identifiers
+#' When `skiLift.identifier_case` is `"upper"` (the default), identifiers
 #' are uppercased before quoting, matching Snowflake's default behavior for
 #' unquoted identifiers and the behavior of the ODBC driver.  When set to
 #' `"preserve"`, identifiers retain their original case.
@@ -49,7 +49,7 @@
 #' @returns Character vector, possibly uppercased.
 #' @noRd
 .maybe_upcase <- function(x) {
-  if (identical(getOption("RSnowflake.identifier_case", "upper"), "upper")) {
+  if (identical(getOption("skiLift.identifier_case", "upper"), "upper")) {
     toupper(x)
   } else {
     x

@@ -1,4 +1,4 @@
-# Continuous integration for RSnowflake
+# Continuous integration for skiLift
 # Runs offline unit tests and R CMD check on push/PR to main.
 # No Snowflake credentials required (all tests use mock objects).
 

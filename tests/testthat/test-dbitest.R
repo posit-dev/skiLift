@@ -1,18 +1,18 @@
 # DBItest compliance suite - requires live Snowflake connection.
-# Skipped unless RSNOWFLAKE_DBITEST=true is set.
+# Skipped unless SKILIFT_DBITEST=true is set.
 
 skip_if(
-  !nzchar(Sys.getenv("RSNOWFLAKE_DBITEST", "")),
-  "DBItest skipped (set RSNOWFLAKE_DBITEST=true to enable)"
+  !nzchar(Sys.getenv("SKILIFT_DBITEST", "")),
+  "DBItest skipped (set SKILIFT_DBITEST=true to enable)"
 )
 
 skip_if_not_installed("DBItest")
 
 library(DBItest)
 
-old_case <- getOption("RSnowflake.identifier_case")
-options(RSnowflake.identifier_case = "preserve")
-withr::defer(options(RSnowflake.identifier_case = old_case))
+old_case <- getOption("skiLift.identifier_case")
+options(skiLift.identifier_case = "preserve")
+withr::defer(options(skiLift.identifier_case = old_case))
 
 # Snowflake-specific tweaks
 sf_tweaks <- tweaks(
@@ -88,7 +88,7 @@ sf_skip <- c(
 
 ctx <- make_context(
   Snowflake(),
-  connect_args = list(name = Sys.getenv("RSNOWFLAKE_PROFILE", "default")),
+  connect_args = list(name = Sys.getenv("SKILIFT_PROFILE", "default")),
   tweaks = sf_tweaks,
   default_skip = sf_skip
 )

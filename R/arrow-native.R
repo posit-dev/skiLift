@@ -49,7 +49,7 @@ sf_download_arrow_chunk <- function(url, chunk_headers = NULL, qrmk = NULL) {
   rlang::check_installed("nanoarrow", reason = "for native Arrow transport")
 
   req <- httr2::request(url) |>
-    httr2::req_timeout(getOption("RSnowflake.timeout", 600L)) |>
+    httr2::req_timeout(getOption("skiLift.timeout", 600L)) |>
     httr2::req_error(is_error = function(resp) FALSE)
 
   if (!is.null(chunk_headers)) {
@@ -147,7 +147,7 @@ sf_fetch_all_native_arrow <- function(con, resp) {
     return(nanoarrow::as_nanoarrow_array_stream(first_df))
   }
 
-  use_parallel <- isTRUE(getOption("RSnowflake.parallel_fetch", TRUE)) &&
+  use_parallel <- isTRUE(getOption("skiLift.parallel_fetch", TRUE)) &&
                   length(chunk_urls) > 1L
 
   if (use_parallel) {
@@ -156,7 +156,7 @@ sf_fetch_all_native_arrow <- function(con, resp) {
       cl <- parallel::makeCluster(n_workers)
       on.exit(parallel::stopCluster(cl), add = TRUE)
       parallel::clusterEvalQ(cl, {
-        loadNamespace("RSnowflake")
+        loadNamespace("skiLift")
         loadNamespace("httr2")
         loadNamespace("nanoarrow")
       })
@@ -186,7 +186,7 @@ sf_fetch_all_native_arrow <- function(con, resp) {
 #' Check if native Arrow transport is available for a connection
 #' @noRd
 .can_use_native_arrow <- function(conn) {
-  isTRUE(getOption("RSnowflake.use_native_arrow", FALSE)) &&
+  isTRUE(getOption("skiLift.use_native_arrow", FALSE)) &&
     .has_session(conn) &&
     requireNamespace("nanoarrow", quietly = TRUE)
 }

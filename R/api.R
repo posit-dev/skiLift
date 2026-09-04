@@ -15,7 +15,7 @@ sf_api_submit <- function(con, sql, bindings = NULL, async = FALSE) {
 
   body <- list(
     statement = sql,
-    timeout   = getOption("RSnowflake.timeout", 600L),
+    timeout   = getOption("skiLift.timeout", 600L),
     resultSetMetaData = list(format = "jsonv2")
   )
 
@@ -212,7 +212,7 @@ sf_api_cancel <- function(con, handle) {
       "Accept"        = "application/json",
       "User-Agent"    = sf_user_agent()
     ) |>
-    httr2::req_timeout(getOption("RSnowflake.timeout", 600L))
+    httr2::req_timeout(getOption("skiLift.timeout", 600L))
 
   if (!is.null(body)) {
     req <- req |> httr2::req_body_json(body, auto_unbox = TRUE)
@@ -222,7 +222,7 @@ sf_api_cancel <- function(con, handle) {
     req <- req |> httr2::req_method("GET")
   }
 
-  max_retries <- getOption("RSnowflake.retry_max", 3L)
+  max_retries <- getOption("skiLift.retry_max", 3L)
   req <- req |>
     httr2::req_error(is_error = function(resp) FALSE) |>
     httr2::req_retry(
@@ -268,7 +268,7 @@ sf_api_cancel <- function(con, handle) {
 #' from httr2::resp_body_json().
 #' @noRd
 .parse_json_body <- function(resp) {
-  use_simd <- isTRUE(getOption("RSnowflake.use_simdjson", TRUE))
+  use_simd <- isTRUE(getOption("skiLift.use_simdjson", TRUE))
   if (use_simd && requireNamespace("RcppSimdJson", quietly = TRUE)) {
     raw_bytes <- httr2::resp_body_raw(resp)
     return(RcppSimdJson::fparse(rawToChar(raw_bytes)))

@@ -33,7 +33,7 @@
 #' @noRd
 .insert_data_bind <- function(conn, table_id, df, batch_size = NULL) {
   if (is.null(batch_size)) {
-    batch_size <- as.integer(getOption("RSnowflake.insert_batch_size", 16384L))
+    batch_size <- as.integer(getOption("skiLift.insert_batch_size", 16384L))
   }
   n <- nrow(df)
   ncols <- ncol(df)

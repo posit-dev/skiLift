@@ -12,7 +12,7 @@
 
 
 
-<title>RSnowflake in Snowflake Workspace Notebooks</title>
+<title>skiLift in Snowflake Workspace Notebooks</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -235,23 +235,23 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
-<h1 class="title toc-ignore">RSnowflake in Snowflake Workspace
+<h1 class="title toc-ignore">skiLift in Snowflake Workspace
 Notebooks</h1>
 
 
 
 <p>This vignette focuses on <strong>Snowflake Workspace
-Notebooks</strong>: how RSnowflake fits the Python + <code>%%R</code>
+Notebooks</strong>: how skiLift fits the Python + <code>%%R</code>
 model, what to install first, and how <strong>ADBC</strong>
 (<code>adbcsnowflake</code>) behaves behind the internal SPCS gateway.
 For general DBI usage and authentication modes, see
-<strong><code>vignette(&quot;getting-started&quot;, package = &quot;RSnowflake&quot;)</code></strong>.</p>
+<strong><code>vignette(&quot;getting-started&quot;, package = &quot;skiLift&quot;)</code></strong>.</p>
 <div id="execution-model" class="section level2">
 <h2>Execution model</h2>
 <ol style="list-style-type: decimal">
 <li>The <strong>Python kernel</strong> holds the Snowpark session
 Workspace creates for you.</li>
-<li><strong><code>%%R</code> cells</strong> run R via rpy2; RSnowflake
+<li><strong><code>%%R</code> cells</strong> run R via rpy2; skiLift
 in R uses HTTPS like anywhere else.</li>
 <li><strong><code>dbConnect(Snowflake())</code></strong> in R succeeds
 when the environment variables Workspace / <code>setup_notebook()</code>
@@ -261,14 +261,14 @@ Workspace Notebooks</strong> section).</li>
 <p>Run your <strong>Python bootstrap</strong> (for example
 <code>setup_notebook()</code> from <code>sfnb_setup.py</code>)
 <strong>before</strong> the first <code>%%R</code> cell that loads
-RSnowflake.</p>
+skiLift.</p>
 </div>
 <div id="optional-adbc-adbcsnowflake" class="section level2">
 <h2>Optional ADBC (<code>adbcsnowflake</code>)</h2>
 <p>ADBC is <strong>optional</strong>. When
 <strong><code>adbcsnowflake</code></strong> and
 <strong><code>adbcdrivermanager</code></strong> are installed,
-RSnowflake can use Arrow-native paths for reads and bulk writes.
+skiLift can use Arrow-native paths for reads and bulk writes.
 Building <code>adbcsnowflake</code> requires a <strong>Go
 compiler</strong> on the machine where <code>install.packages()</code>
 runs.</p>
@@ -287,32 +287,32 @@ toolkit.</p>
 </div>
 <div id="internal-spcs-gateway-snowflake_host" class="section level2">
 <h2>Internal SPCS gateway (<code>SNOWFLAKE_HOST</code>)</h2>
-<p>From Workspace containers, RSnowflake and ADBC can use the
+<p>From Workspace containers, skiLift and ADBC can use the
 <strong>internal</strong> gateway (<code>SNOWFLAKE_HOST</code>) with the
 container <strong>OAuth</strong> token. You do <strong>not</strong> need
 the public <code>*.snowflakecomputing.com</code> URL for routine
 Snowflake traffic when the session is wired correctly.</p>
 <p>Bulk write routing (<code>upload_method = &quot;auto&quot;</code>, thresholds,
 fallbacks) is described in
-<strong><code>vignette(&quot;getting-started&quot;, package = &quot;RSnowflake&quot;)</code></strong>
+<strong><code>vignette(&quot;getting-started&quot;, package = &quot;skiLift&quot;)</code></strong>
 (<strong>Bulk Write Methods</strong>). Tuning options use R options such
-as <code>RSnowflake.upload_method</code> and
-<code>RSnowflake.bulk_write_threshold</code>.</p>
+as <code>skiLift.upload_method</code> and
+<code>skiLift.bulk_write_threshold</code>.</p>
 </div>
 <div id="deep-dive-and-benchmarks" class="section level2">
 <h2>Deep dive and benchmarks</h2>
 <p>The authoritative engineering note for Workspace + ADBC
 (architecture, redirect chains, benchmarks, PAT fallbacks for
-<strong>external</strong> hosts) ships in the RSnowflake repository as
+<strong>external</strong> hosts) ships in the skiLift repository as
 <strong><code>WORKSPACE_ADBC.md</code></strong>:</p>
-<p><a href="https://github.com/Snowflake-Labs/RSnowflake/blob/main/WORKSPACE_ADBC.md" class="uri">https://github.com/Snowflake-Labs/RSnowflake/blob/main/WORKSPACE_ADBC.md</a></p>
+<p><a href="https://github.com/posit-dev/skiLift/blob/main/WORKSPACE_ADBC.md" class="uri">https://github.com/posit-dev/skiLift/blob/main/WORKSPACE_ADBC.md</a></p>
 </div>
 <div id="companion-ml-workflows" class="section level2">
 <h2>Companion ML workflows</h2>
-<p>If you use <strong>snowflakeR</strong> in the same notebook, DBI
+<p>If you use <strong>skiPatrol</strong> in the same notebook, DBI
 access from R can share credentials via
-<code>snowflakeR::sfr_dbi_connection()</code>. See
-<strong><code>vignette(&quot;workspace-notebooks&quot;, package = &quot;snowflakeR&quot;)</code></strong>.</p>
+<code>skiPatrol::sfr_dbi_connection()</code>. See
+<strong><code>vignette(&quot;workspace-notebooks&quot;, package = &quot;skiPatrol&quot;)</code></strong>.</p>
 </div>
 
 

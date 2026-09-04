@@ -1,12 +1,12 @@
-# RSnowflake 0.2.1
+# skiLift 0.2.1
 
 ## Documentation / Workspace
 
-* **`inst/notebooks/rsnowflake_config.yaml`** -- commented `mirrors` and
-  `auth_secret` template aligned with snowflakeR / sfnb-multilang for
+* **`inst/notebooks/skilift_config.yaml`** -- commented `mirrors` and
+  `auth_secret` template aligned with skiPatrol / sfnb-multilang for
   Workspace Notebook Secrets (Artifactory bootstrap).
 
-# RSnowflake 0.2.0
+# skiLift 0.2.0
 
 ## New Features
 
@@ -28,7 +28,7 @@ verbs  are translated to Snowflake SQL and executed lazily. Inherits
 
 * **Improved bulk upload** -- `dbWriteTable()` and `dbAppendTable()` now
   generate named-column INSERT statements, use a configurable batch size
-  (`options(RSnowflake.insert_batch_size = N)`), and display a `cli` progress
+  (`options(skiLift.insert_batch_size = N)`), and display a `cli` progress
   bar for large uploads.
 
 * **`dbListObjects()`** -- hierarchical browsing of databases, schemas, and
@@ -53,7 +53,7 @@ verbs  are translated to Snowflake SQL and executed lazily. Inherits
 
 * 401 token refresh for JWT authentication is handled transparently.
 
-# RSnowflake 0.1.0
+# skiLift 0.1.0
 
 * Initial release with full DBI compliance via Snowflake SQL API v2.
 * JWT key-pair authentication, session-token (Workspace) auth.

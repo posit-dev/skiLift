@@ -113,7 +113,7 @@ setMethod("dbFetch", signature("SnowflakeResult"),
 
       if (total_partitions > start_part) {
         remaining <- seq.int(start_part, total_partitions - 1L)
-        use_parallel <- isTRUE(getOption("RSnowflake.parallel_fetch", TRUE)) &&
+        use_parallel <- isTRUE(getOption("skiLift.parallel_fetch", TRUE)) &&
                         length(remaining) > 1L
 
         if (use_parallel) {

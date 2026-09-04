@@ -15,17 +15,17 @@ Usage in notebooks:
 
     # Single-cell setup (recommended):
     from sfnb_setup import setup_notebook
-    setup_notebook(config="snowflaker_config.yaml", packages=["snowflakeR"])
+    setup_notebook(config="skipatrol_config.yaml", packages=["skiPatrol"])
 
     # Minimal (zero config):
     from sfnb_setup import setup_notebook
-    setup_notebook(packages=["snowflakeR"])
+    setup_notebook(packages=["skiPatrol"])
 
     # Power user (separate steps):
     from sfnb_setup import ensure_eai, install_r, install_r_packages
     ensure_eai(session, config="my_config.yaml")
     install_r(config="my_config.yaml")
-    install_r_packages(config="my_config.yaml", packages=["snowflakeR"])
+    install_r_packages(config="my_config.yaml", packages=["skiPatrol"])
 
     # Test public-user experience from within the monorepo:
     import os; os.environ["SFNB_PUBLIC_MODE"] = "1"
@@ -203,7 +203,7 @@ def _apply_mirror_auth(mirrors: dict) -> dict:
 def _apply_registry_env(cfg: dict, quiet: bool = False):
     """Export SFR_CONDA_CHANNEL env vars from the registry: YAML section.
 
-    These env vars are read by snowflakeR's sfr_model_registry() and
+    These env vars are read by skiPatrol's sfr_model_registry() and
     sfr_log_model() to enforce a conda channel policy for Model Registry
     inference containers (MODEL_BUILD).
     """
@@ -1066,8 +1066,8 @@ def _bootstrap():
         src = os.path.join(root, "snowflake-notebook-multilang", "src")
         if src not in sys.path:
             sys.path.insert(0, src)
-        for pkg, var in [("snowflakeR", "SNOWFLAKER_PATH"),
-                         ("RSnowflake", "RSNOWFLAKE_PATH")]:
+        for pkg, var in [("skiPatrol", "SKIPATROL_PATH"),
+                         ("skiLift", "SKILIFT_PATH")]:
             pkg_dir = os.path.join(root, pkg)
             if os.path.isdir(pkg_dir):
                 os.environ.setdefault(var, pkg_dir)
@@ -1165,8 +1165,8 @@ def install_r(**kwargs):
 # ==========================================================================
 
 _GITHUB_FALLBACKS = {
-    "snowflakeR": "Snowflake-Labs/snowflakeR",
-    "RSnowflake": "Snowflake-Labs/RSnowflake",
+    "skiPatrol": "posit-dev/skiPatrol",
+    "skiLift": "posit-dev/skiLift",
 }
 
 
@@ -1237,7 +1237,7 @@ def install_r_packages(
 ):
     """Install R packages from tarballs (URL/local/search) with pak fallback."""
     if packages is None:
-        packages = ["snowflakeR", "RSnowflake"]
+        packages = ["skiPatrol", "skiLift"]
 
     cfg = _read_config(config)
     mirrors = _apply_mirror_auth(_get_mirrors(cfg))
@@ -1316,7 +1316,7 @@ def setup_notebook(
     Parameters
     ----------
     config : path to YAML config file (optional)
-    packages : R packages to install, e.g. ["snowflakeR"] (optional)
+    packages : R packages to install, e.g. ["skiPatrol"] (optional)
     languages : languages to install, default ["r"]
     quiet : if True, suppress progress output (summary + errors still shown)
     """
@@ -1389,9 +1389,9 @@ def setup_notebook(
             # Pre-warm heavy ML imports so first user cell isn't slow
             _prewarm_ml_imports(quiet=quiet, mirrors=mirrors)
 
-            # Set SPCS OAuth env vars for RSnowflake DBI connectivity
-            pkgs = packages or ["snowflakeR", "RSnowflake"]
-            if "RSnowflake" in pkgs:
+            # Set SPCS OAuth env vars for skiLift DBI connectivity
+            pkgs = packages or ["skiPatrol", "skiLift"]
+            if "skiLift" in pkgs:
                 _strip = lambda s: (s or "").replace('"', '')
                 os.environ["SNOWFLAKE_ACCOUNT"] = _strip(
                     session.get_current_account())

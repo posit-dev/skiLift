@@ -70,7 +70,7 @@ test_that("sf_fetch_partitions_parallel falls back to sequential for 1 partition
       .mock_partition_resp(partition)
     },
     {
-      withr::with_options(list(RSnowflake.fetch_workers = 1L), {
+      withr::with_options(list(skiLift.fetch_workers = 1L), {
         frames <- sf_fetch_partitions_parallel(con, "h1", c(1L), meta)
       })
     }
@@ -89,7 +89,7 @@ test_that("sf_fetch_partitions_parallel falls back to sequential when workers=1"
       .mock_partition_resp(partition)
     },
     {
-      withr::with_options(list(RSnowflake.fetch_workers = 1L), {
+      withr::with_options(list(skiLift.fetch_workers = 1L), {
         frames <- sf_fetch_partitions_parallel(con, "h1", c(1L, 2L), meta)
       })
     }
@@ -114,9 +114,9 @@ test_that("sequential fetch is used when parallel_fetch option is FALSE", {
       .mock_partition_resp(partition)
     },
     {
-      withr::with_options(list(RSnowflake.parallel_fetch = FALSE), {
+      withr::with_options(list(skiLift.parallel_fetch = FALSE), {
         remaining <- c(1L, 2L)
-        use_parallel <- isTRUE(getOption("RSnowflake.parallel_fetch", TRUE)) &&
+        use_parallel <- isTRUE(getOption("skiLift.parallel_fetch", TRUE)) &&
                         length(remaining) > 1L
         expect_false(use_parallel)
 
@@ -137,7 +137,7 @@ test_that("sequential fetch is used when parallel_fetch option is FALSE", {
 # ---------------------------------------------------------------------------
 
 test_that(".resolve_n_workers auto-detects cores when option is 0", {
-  withr::with_options(list(RSnowflake.fetch_workers = 0L), {
+  withr::with_options(list(skiLift.fetch_workers = 0L), {
     n <- .resolve_n_workers(10L)
     expect_true(n >= 1L)
     expect_true(n <= 10L)
@@ -145,33 +145,33 @@ test_that(".resolve_n_workers auto-detects cores when option is 0", {
 })
 
 test_that(".resolve_n_workers uses explicit positive value", {
-  withr::with_options(list(RSnowflake.fetch_workers = 2L), {
+  withr::with_options(list(skiLift.fetch_workers = 2L), {
     expect_equal(.resolve_n_workers(10L), 2L)
   })
 })
 
 test_that(".resolve_n_workers clamps to n_tasks", {
-  withr::with_options(list(RSnowflake.fetch_workers = 8L), {
+  withr::with_options(list(skiLift.fetch_workers = 8L), {
     expect_equal(.resolve_n_workers(3L), 3L)
   })
 })
 
 test_that(".resolve_n_workers handles 'auto' string", {
-  withr::with_options(list(RSnowflake.fetch_workers = "auto"), {
+  withr::with_options(list(skiLift.fetch_workers = "auto"), {
     n <- .resolve_n_workers(10L)
     expect_true(n >= 1L)
   })
 })
 
 test_that(".resolve_n_workers handles NULL/NA gracefully", {
-  withr::with_options(list(RSnowflake.fetch_workers = NULL), {
+  withr::with_options(list(skiLift.fetch_workers = NULL), {
     n <- .resolve_n_workers(10L)
     expect_true(n >= 1L)
   })
 })
 
 test_that(".resolve_n_workers returns at least 1", {
-  withr::with_options(list(RSnowflake.fetch_workers = 0L), {
+  withr::with_options(list(skiLift.fetch_workers = 0L), {
     expect_true(.resolve_n_workers(1L) >= 1L)
   })
 })

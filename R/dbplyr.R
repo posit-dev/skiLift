@@ -2,7 +2,7 @@
 # =============================================================================
 # Registers SnowflakeConnection as a dbplyr backend, inheriting all of
 # dbplyr's built-in Snowflake SQL translations (paste0 -> CONCAT, IFF,
-# ARRAY_TO_STRING, lubridate date functions, etc.) and adding RSnowflake-
+# ARRAY_TO_STRING, lubridate date functions, etc.) and adding skiLift-
 # specific translations for Snowflake functions that dbplyr does not cover
 # (semi-structured data, array operations, approximate aggregates).
 #

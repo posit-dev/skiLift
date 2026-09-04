@@ -29,6 +29,7 @@
 \alias{dbUnquoteIdentifier,SnowflakeConnection,SQL-method}
 \alias{dbQuoteLiteral,SnowflakeConnection-method}
 \alias{dbDataType,SnowflakeConnection-method}
+\alias{sqlData,SnowflakeConnection-method}
 \alias{dbBegin,SnowflakeConnection-method}
 \alias{dbCommit,SnowflakeConnection-method}
 \alias{dbRollback,SnowflakeConnection-method}
@@ -95,6 +96,8 @@
 
 \S4method{dbDataType}{SnowflakeConnection}(dbObj, obj, ...)
 
+\S4method{sqlData}{SnowflakeConnection}(con, value, row.names = FALSE, ...)
+
 \S4method{dbBegin}{SnowflakeConnection}(conn, ...)
 
 \S4method{dbCommit}{SnowflakeConnection}(conn, ...)
@@ -137,11 +140,13 @@
 
 \item{obj}{An R object to map to a Snowflake SQL type.}
 
+\item{con}{A \linkS4class{SnowflakeConnection} object.}
+
 \item{code}{Code to execute within the transaction.}
 }
 \description{
 An S4 class representing a connection to Snowflake via the SQL API v2.
-Created by \code{\link[=dbConnect]{dbConnect()}} with a \code{\link[=Snowflake]{Snowflake()}} driver.
+Created by \code{\link[DBI:dbConnect]{DBI::dbConnect()}} with a \code{\link[=Snowflake]{Snowflake()}} driver.
 }
 \section{Slots}{
 
@@ -160,6 +165,7 @@ Created by \code{\link[=dbConnect]{dbConnect()}} with a \code{\link[=Snowflake]{
 
 \item{\code{.auth}}{Auth list (type, token, token_type, plus params for refresh).}
 
-\item{\code{.state}}{Environment holding mutable state (valid, in_transaction, session_info).}
+\item{\code{.state}}{Environment holding mutable state (valid, in_transaction,
+session_info, and the live auth token cache -- token, token_mtime).}
 }}
 

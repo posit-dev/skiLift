@@ -12,7 +12,7 @@
 
 
 
-<title>RSnowflake in Custom SPCS Services</title>
+<title>skiLift in Custom SPCS Services</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -336,20 +336,20 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
-<h1 class="title toc-ignore">RSnowflake in Custom SPCS Services</h1>
+<h1 class="title toc-ignore">skiLift in Custom SPCS Services</h1>
 
 
 
-<p>This vignette covers <strong>RSnowflake</strong> in <strong>custom
+<p>This vignette covers <strong>skiLift</strong> in <strong>custom
 Snowpark Container Services (SPCS)</strong> workloads — for example
 <strong>RStudio Server</strong> deployed as a long-running service. It
 is <strong>not</strong> the Workspace Notebook path (<code>%%R</code>
 via rpy2); see
-<strong><code>vignette(&quot;workspace-rsnowflake&quot;, package = &quot;RSnowflake&quot;)</code></strong>
+<strong><code>vignette(&quot;workspace-skilift&quot;, package = &quot;skiLift&quot;)</code></strong>
 for that.</p>
 <p>For the full deploy kit (Docker, service spec, smoke tests), see the
-<strong>snowflakeR</strong> package:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">system.file</span>(<span class="st">&quot;rstudio-spcs&quot;</span>, <span class="at">package =</span> <span class="st">&quot;snowflakeR&quot;</span>)</span></code></pre></div>
+<strong>skiPatrol</strong> package:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">system.file</span>(<span class="st">&quot;rstudio-spcs&quot;</span>, <span class="at">package =</span> <span class="st">&quot;skiPatrol&quot;</span>)</span></code></pre></div>
 <p>Or the Hitchhiker’s Guide chapter <strong>RStudio Server on
 SPCS</strong>.</p>
 <div id="execution-model" class="section level2">
@@ -369,12 +369,12 @@ service spec.</p>
 <div id="connect" class="section level2">
 <h2>Connect</h2>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(DBI)</span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">library</span>(RSnowflake)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">library</span>(skiLift)</span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
 <span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">dbConnect</span>(<span class="fu">Snowflake</span>())</span>
 <span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="fu">dbGetQuery</span>(con, <span class="st">&quot;SELECT CURRENT_USER(), CURRENT_WAREHOUSE()&quot;</span>)</span></code></pre></div>
-<p>RSnowflake resolves auth in this order
-(<code>RSnowflake/R/auth.R</code>):</p>
+<p>skiLift resolves auth in this order
+(<code>skiLift/R/auth.R</code>):</p>
 <ol style="list-style-type: decimal">
 <li>Explicit bearer <code>token</code> argument</li>
 <li><strong>SPCS OAuth</strong> — <code>SNOWFLAKE_HOST</code> + token
@@ -393,7 +393,7 @@ YAML:</p>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="at">  </span><span class="fu">SNOWFLAKE_DATABASE</span><span class="kw">:</span><span class="at"> MY_DB</span></span>
 <span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="at">  </span><span class="fu">SNOWFLAKE_SCHEMA</span><span class="kw">:</span><span class="at"> MY_SCHEMA</span></span>
 <span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="at">  </span><span class="fu">SNOWFLAKE_ROLE</span><span class="kw">:</span><span class="at"> MY_ROLE</span></span></code></pre></div>
-<p>RSnowflake passes these to the SQL API session. <strong>Do
+<p>skiLift passes these to the SQL API session. <strong>Do
 not</strong> rely on:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">&quot;USE WAREHOUSE MY_WH&quot;</span>)   <span class="co"># not supported — SQL REST API</span></span></code></pre></div>
 <p>The SQL REST API does not support <code>USE</code>,
@@ -411,10 +411,10 @@ endpoint (with EAI).</p>
 </div>
 <div id="rstudio-connections-pane" class="section level2">
 <h2>RStudio Connections pane</h2>
-<p>RSnowflake registers with the RStudio Connections pane. Probe
-messages tagged <code>[RSnowflake pane]</code> are normal when the pane
+<p>skiLift registers with the RStudio Connections pane. Probe
+messages tagged <code>[skiLift pane]</code> are normal when the pane
 checks driver availability. To show verbose pane diagnostics:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">options</span>(<span class="at">rsnowflake.connections_pane_verbose =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skilift.connections_pane_verbose =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 </div>
 <div id="stage-file-io" class="section level2">
 <h2>Stage file I/O</h2>
@@ -427,25 +427,25 @@ volume:</p>
 <span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> stage-vol</span></span>
 <span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="at">  </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;@MY_DB.MY_SCHEMA.MY_STAGE&quot;</span></span></code></pre></div>
 <p>Read and write via the filesystem path in R. Do not use
-<code>GET</code>/<code>PUT</code> SQL with RSnowflake.</p>
+<code>GET</code>/<code>PUT</code> SQL with skiLift.</p>
 </div>
 <div id="optional-adbc" class="section level2">
 <h2>Optional ADBC</h2>
-<p>When <code>adbcsnowflake</code> is baked into the image, RSnowflake
+<p>When <code>adbcsnowflake</code> is baked into the image, skiLift
 can use Arrow-native bulk paths via the same internal gateway. See
-<strong><code>WORKSPACE_ADBC.md</code></strong> in the RSnowflake
+<strong><code>WORKSPACE_ADBC.md</code></strong> in the skiLift
 repository for gateway and redirect-chain detail (applies to SPCS
 containers as well as Workspace).</p>
 </div>
-<div id="companion-snowflaker" class="section level2">
-<h2>Companion: snowflakeR</h2>
+<div id="companion-skipatrol" class="section level2">
+<h2>Companion: skiPatrol</h2>
 <p>ML platform APIs (<code>sfr_connect()</code>, Feature Store, Model
 Registry) require Snowpark Python via <strong>reticulate</strong>. In
 custom SPCS services, <strong><code>sfr_connect()</code> does not
 auto-detect</strong> the environment — use
 <strong><code>sfr_connect_spcs()</code></strong> from the rstudio-spcs
 kit or
-<strong><code>vignette(&quot;rstudio-spcs&quot;, package = &quot;snowflakeR&quot;)</code></strong>.</p>
+<strong><code>vignette(&quot;rstudio-spcs&quot;, package = &quot;skiPatrol&quot;)</code></strong>.</p>
 </div>
 
 

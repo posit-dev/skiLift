@@ -128,7 +128,7 @@ setMethod("dbSendQuery", signature("SnowflakeConnection", "character"),
 
     # ADBC fast path for parameterless queries -- eagerly fetch the result
     # so that downstream dbFetch() can return the cached data.frame.
-    backend <- getOption("RSnowflake.backend", "auto")
+    backend <- getOption("skiLift.backend", "auto")
     if (is.null(params) && backend %in% c("adbc", "auto")) {
       adbc <- .ensure_adbc(conn)
       if (!is.null(adbc)) {
@@ -190,7 +190,7 @@ setMethod("dbSendStatement", signature("SnowflakeConnection", "character"),
     .check_valid(conn)
 
     # ADBC fast path for parameterless DDL/DML
-    backend <- getOption("RSnowflake.backend", "auto")
+    backend <- getOption("skiLift.backend", "auto")
     if (is.null(params) && backend %in% c("adbc", "auto")) {
       adbc <- .ensure_adbc(conn)
       if (!is.null(adbc)) {
@@ -245,7 +245,7 @@ setMethod("dbGetQuery", signature("SnowflakeConnection", "character"),
     .check_valid(conn)
 
     # ADBC fast path for parameterless SELECT queries
-    backend <- getOption("RSnowflake.backend", "auto")
+    backend <- getOption("skiLift.backend", "auto")
     if (is.null(params) && backend %in% c("adbc", "auto")) {
       adbc <- .ensure_adbc(conn)
       if (!is.null(adbc)) {
@@ -274,7 +274,7 @@ setMethod("dbGetQuery", signature("SnowflakeConnection", "character"),
     if (meta$num_partitions > 1L) {
       remaining_indices <- seq.int(1L, meta$num_partitions - 1L)
 
-      use_parallel <- isTRUE(getOption("RSnowflake.parallel_fetch", TRUE)) &&
+      use_parallel <- isTRUE(getOption("skiLift.parallel_fetch", TRUE)) &&
                       length(remaining_indices) > 1L
 
       if (use_parallel) {
@@ -302,7 +302,7 @@ setMethod("dbExecute", signature("SnowflakeConnection", "character"),
     .check_valid(conn)
 
     # ADBC fast path for parameterless statements
-    backend <- getOption("RSnowflake.backend", "auto")
+    backend <- getOption("skiLift.backend", "auto")
     if (is.null(params) && backend %in% c("adbc", "auto")) {
       adbc <- .ensure_adbc(conn)
       if (!is.null(adbc)) {
@@ -350,7 +350,7 @@ setMethod("dbGetQueryArrow", signature("SnowflakeConnection", "character"),
     .check_valid(conn)
 
     # ADBC Arrow path (preferred -- true server-side Arrow)
-    backend <- getOption("RSnowflake.backend", "auto")
+    backend <- getOption("skiLift.backend", "auto")
     if (is.null(params) && backend %in% c("adbc", "auto")) {
       adbc <- .ensure_adbc(conn)
       if (!is.null(adbc)) {
@@ -829,11 +829,11 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
 #' - `"bind"`: DEPRECATED.
 #' @noRd
 .insert_data <- function(conn, table_id, df) {
-  method <- getOption("RSnowflake.upload_method", "auto")
+  method <- getOption("skiLift.upload_method", "auto")
   cells <- nrow(df) * ncol(df)
   threshold <- as.integer(
-    getOption("RSnowflake.bulk_write_threshold",
-              getOption("RSnowflake.adbc_write_threshold", 50000L))
+    getOption("skiLift.bulk_write_threshold",
+              getOption("skiLift.adbc_write_threshold", 50000L))
   )
   in_workspace <- nzchar(Sys.getenv("SNOWFLAKE_HOST", ""))
 
@@ -894,7 +894,7 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
 #' Uses ADBC when available (avoids REST API on public endpoint).
 #' @noRd
 .insert_data_literal <- function(conn, table_id, df) {
-  batch_size <- getOption("RSnowflake.insert_batch_size", 5000L)
+  batch_size <- getOption("skiLift.insert_batch_size", 5000L)
   batch_size <- as.integer(batch_size)
   n <- nrow(df)
   ncols <- ncol(df)
@@ -953,6 +953,7 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
 }
 
 #' @rdname SnowflakeConnection-class
+#' @param con A [SnowflakeConnection-class] object.
 #' @export
 setMethod("sqlData", "SnowflakeConnection",
   function(con, value, row.names = FALSE, ...) {

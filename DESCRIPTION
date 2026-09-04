@@ -1,4 +1,4 @@
-Package: RSnowflake
+Package: skiLift
 Title: DBI Interface to 'Snowflake'
 Version: 0.2.1
 Authors@R: c(
@@ -12,11 +12,11 @@ Description: A DBI-compliant interface to Snowflake (<https://www.snowflake.com>
     bulk reads (Arrow-native) and writes (PUT + COPY INTO), activated
     automatically when adbcsnowflake is installed.
 License: Apache License (>= 2) | file LICENSE
-URL: https://github.com/Snowflake-Labs/RSnowflake
-BugReports: https://github.com/Snowflake-Labs/RSnowflake/issues
+URL: https://github.com/posit-dev/skiLift
+BugReports: https://github.com/posit-dev/skiLift/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0)
 Imports:

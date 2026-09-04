@@ -1,5 +1,5 @@
 # =============================================================================
-# RSnowflake -- Local Test Script (RStudio / Positron / Cursor)
+# skiLift -- Local Test Script (RStudio / Positron / Cursor)
 # =============================================================================
 #
 # This script mirrors the Workspace Notebook test suite but runs locally.
@@ -8,22 +8,22 @@
 #
 # First-time setup (from the project root in RStudio):
 #   renv::restore()                # install all pinned dependencies
-#   renv::install("./RSnowflake")  # install package from local source
+#   renv::install("./skiLift")  # install package from local source
 #
 # Prerequisites:
 #   1. Open the top-level project folder in RStudio (renv activates automatically)
 #   2. Ensure a connections.toml profile is configured
 #      (default: ~/.snowflake/connections.toml  [default])
 #   3. Key-pair JWT auth configured (no MFA needed)
-#   4. Override profile: Sys.setenv(RSNOWFLAKE_PROFILE = "my_profile")
+#   4. Override profile: Sys.setenv(SKILIFT_PROFILE = "my_profile")
 #
 # Usage:
-#   source("RSnowflake/inst/rstudio/test_rsnowflake.R")
+#   source("skiLift/inst/rstudio/test_skilift.R")
 #   -- OR open in RStudio and Run All
 # =============================================================================
 
 library(DBI)
-library(RSnowflake)
+library(skiLift)
 
 # ---------------------------------------------------------------------------
 # Test harness
@@ -46,7 +46,7 @@ check <- function(name, condition) {
 # ---------------------------------------------------------------------------
 cat("== 1. Connect ==\n")
 
-profile <- Sys.getenv("RSNOWFLAKE_PROFILE", "default")
+profile <- Sys.getenv("SKILIFT_PROFILE", "default")
 con <- dbConnect(Snowflake(), name = profile)
 check("dbConnect succeeds", dbIsValid(con))
 print(con)
@@ -96,29 +96,29 @@ test_df <- data.frame(
   stringsAsFactors = FALSE
 )
 
-dbWriteTable(con, "RSNOWFLAKE_LOCAL_TEST", test_df, overwrite = TRUE)
+dbWriteTable(con, "SKILIFT_LOCAL_TEST", test_df, overwrite = TRUE)
 check("dbWriteTable succeeds", TRUE)
 
-check("dbExistsTable finds it", dbExistsTable(con, "RSNOWFLAKE_LOCAL_TEST"))
+check("dbExistsTable finds it", dbExistsTable(con, "SKILIFT_LOCAL_TEST"))
 
 tables <- dbListTables(con)
 check("dbListTables includes table",
-      "RSNOWFLAKE_LOCAL_TEST" %in% toupper(tables))
+      "SKILIFT_LOCAL_TEST" %in% toupper(tables))
 
-fields <- dbListFields(con, "RSNOWFLAKE_LOCAL_TEST")
+fields <- dbListFields(con, "SKILIFT_LOCAL_TEST")
 check("dbListFields returns 4 columns", length(fields) == 4)
 check("dbListFields returns uppercase (ODBC-compat default)",
       identical(fields, c("ID", "NAME", "SCORE", "ACTIVE")))
 cat("  Fields:", paste(fields, collapse = ", "), "\n")
 
-df_read <- dbReadTable(con, "RSNOWFLAKE_LOCAL_TEST")
+df_read <- dbReadTable(con, "SKILIFT_LOCAL_TEST")
 check("dbReadTable returns 5 rows", nrow(df_read) == 5)
 check("integer roundtrip", is.integer(df_read$ID))
 check("string roundtrip", df_read$NAME[1] == "Alice")
 
 extra <- data.frame(id = 6L, name = "Frank", score = 91.0, active = TRUE)
-dbWriteTable(con, "RSNOWFLAKE_LOCAL_TEST", extra, append = TRUE)
-df_after <- dbReadTable(con, "RSNOWFLAKE_LOCAL_TEST")
+dbWriteTable(con, "SKILIFT_LOCAL_TEST", extra, append = TRUE)
+df_after <- dbReadTable(con, "SKILIFT_LOCAL_TEST")
 check("append adds rows", nrow(df_after) == 6)
 
 # ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ check("append adds rows", nrow(df_after) == 6)
 # ---------------------------------------------------------------------------
 cat("\n== 4. Streaming Results ==\n")
 
-sql <- 'SELECT * FROM RSNOWFLAKE_LOCAL_TEST ORDER BY "ID"'
+sql <- 'SELECT * FROM SKILIFT_LOCAL_TEST ORDER BY "ID"'
 res <- dbSendQuery(con, sql)
 check("dbSendQuery returns SnowflakeResult", is(res, "SnowflakeResult"))
 check("result is valid", dbIsValid(res))
@@ -179,10 +179,10 @@ check("table = mytable", ids[[1]]@name[["table"]] == "mytable")
 # ---------------------------------------------------------------------------
 cat("\n== 7. DML ==\n")
 
-affected <- dbExecute(con, 'DELETE FROM RSNOWFLAKE_LOCAL_TEST WHERE "ID" = 6')
+affected <- dbExecute(con, 'DELETE FROM SKILIFT_LOCAL_TEST WHERE "ID" = 6')
 check("dbExecute DELETE returns affected", affected >= 1)
 
-df <- dbGetQuery(con, "SELECT COUNT(*) AS cnt FROM RSNOWFLAKE_LOCAL_TEST")
+df <- dbGetQuery(con, "SELECT COUNT(*) AS cnt FROM SKILIFT_LOCAL_TEST")
 check("row deleted", df$CNT == 5)
 
 # ---------------------------------------------------------------------------
@@ -192,15 +192,15 @@ cat("\n== 8. Transactions ==\n")
 
 tryCatch({
   dbBegin(con)
-  dbExecute(con, "INSERT INTO \"RSNOWFLAKE_LOCAL_TEST\" (\"ID\", \"NAME\", \"SCORE\", \"ACTIVE\") VALUES (7, 'Grace', 99.0, TRUE)")
+  dbExecute(con, "INSERT INTO \"SKILIFT_LOCAL_TEST\" (\"ID\", \"NAME\", \"SCORE\", \"ACTIVE\") VALUES (7, 'Grace', 99.0, TRUE)")
   dbCommit(con)
-  df <- dbGetQuery(con, "SELECT COUNT(*) AS cnt FROM RSNOWFLAKE_LOCAL_TEST")
+  df <- dbGetQuery(con, "SELECT COUNT(*) AS cnt FROM SKILIFT_LOCAL_TEST")
   check("transaction commit", df$CNT == 6)
 
   dbBegin(con)
-  dbExecute(con, "INSERT INTO \"RSNOWFLAKE_LOCAL_TEST\" (\"ID\", \"NAME\", \"SCORE\", \"ACTIVE\") VALUES (8, 'Heidi', 77.0, FALSE)")
+  dbExecute(con, "INSERT INTO \"SKILIFT_LOCAL_TEST\" (\"ID\", \"NAME\", \"SCORE\", \"ACTIVE\") VALUES (8, 'Heidi', 77.0, FALSE)")
   dbRollback(con)
-  df <- dbGetQuery(con, "SELECT COUNT(*) AS cnt FROM RSNOWFLAKE_LOCAL_TEST")
+  df <- dbGetQuery(con, "SELECT COUNT(*) AS cnt FROM SKILIFT_LOCAL_TEST")
   check("transaction rollback", df$CNT == 6)
 }, error = function(e) {
   cat("  SKIP: Transactions not yet supported --", conditionMessage(e), "\n")
@@ -211,7 +211,7 @@ tryCatch({
 # ---------------------------------------------------------------------------
 cat("\n== 9. Parameterized Queries ==\n")
 
-res <- dbSendQuery(con, "SELECT * FROM RSNOWFLAKE_LOCAL_TEST WHERE \"ID\" = ?")
+res <- dbSendQuery(con, "SELECT * FROM SKILIFT_LOCAL_TEST WHERE \"ID\" = ?")
 dbBind(res, list(1L))
 df <- dbFetch(res)
 dbClearResult(res)
@@ -236,7 +236,7 @@ cat("  Databases found:", nrow(objs), "\n")
 cat("\n== 11. Arrow (optional) ==\n")
 
 if (requireNamespace("nanoarrow", quietly = TRUE)) {
-  stream <- dbGetQueryArrow(con, "SELECT * FROM RSNOWFLAKE_LOCAL_TEST")
+  stream <- dbGetQueryArrow(con, "SELECT * FROM SKILIFT_LOCAL_TEST")
   arrow_df <- as.data.frame(stream)
   check("dbGetQueryArrow returns data", nrow(arrow_df) > 0)
   check("Arrow column count matches", ncol(arrow_df) == 4)
@@ -249,8 +249,8 @@ if (requireNamespace("nanoarrow", quietly = TRUE)) {
 # ---------------------------------------------------------------------------
 cat("\n== 12. Cleanup ==\n")
 
-dbRemoveTable(con, "RSNOWFLAKE_LOCAL_TEST")
-check("table removed", !dbExistsTable(con, "RSNOWFLAKE_LOCAL_TEST"))
+dbRemoveTable(con, "SKILIFT_LOCAL_TEST")
+check("table removed", !dbExistsTable(con, "SKILIFT_LOCAL_TEST"))
 
 dbDisconnect(con)
 check("disconnected", !dbIsValid(con))

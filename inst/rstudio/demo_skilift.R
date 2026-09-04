@@ -1,12 +1,12 @@
 # =============================================================================
-# RSnowflake -- Feature Demo (RStudio / Positron)
+# skiLift -- Feature Demo (RStudio / Positron)
 # =============================================================================
 #
 # First-time setup (from the project root in RStudio):
 #   renv::restore()                # install all pinned dependencies
-#   renv::install("./RSnowflake")  # install package from local source
+#   renv::install("./skiLift")  # install package from local source
 #
-# An interactive walkthrough of RSnowflake's key features:
+# An interactive walkthrough of skiLift's key features:
 #   1. DBI connection via connections.toml
 #   2. Querying (dbGetQuery, dbSendQuery/dbFetch)
 #   3. Table operations (write, read, append, remove)
@@ -21,13 +21,13 @@
 # =============================================================================
 
 library(DBI)
-library(RSnowflake)
+library(skiLift)
 
 # ── 1. Connect ──────────────────────────────────────────────────────────────
 
 # Uses a connections.toml profile (JWT key-pair auth -- no password or MFA required)
-# Override: Sys.setenv(RSNOWFLAKE_PROFILE = "my_profile")
-profile <- Sys.getenv("RSNOWFLAKE_PROFILE", "default")
+# Override: Sys.setenv(SKILIFT_PROFILE = "my_profile")
+profile <- Sys.getenv("SKILIFT_PROFILE", "default")
 con <- dbConnect(Snowflake(), name = profile)
 con
 dbGetInfo(con)
@@ -51,8 +51,8 @@ dbGetQuery(con, "
 # ── 3. Table Operations ────────────────────────────────────────────────────
 
 # Create a demo data.frame with lowercase column names.
-# By default, RSnowflake uppercases identifiers (ODBC-compatible behavior).
-# Set options(RSnowflake.identifier_case = "preserve") to keep original case.
+# By default, skiLift uppercases identifiers (ODBC-compatible behavior).
+# Set options(skiLift.identifier_case = "preserve") to keep original case.
 demo <- data.frame(
   id     = 1:10,
   city   = c("London", "Paris", "Tokyo", "Sydney", "NYC",
@@ -86,7 +86,7 @@ dbGetQuery(con, "SELECT COUNT(*) AS n FROM DEMO_CITIES")
 
 # ── 4. Identifier Case Handling ─────────────────────────────────────────────
 
-# By default, RSnowflake uppercases identifiers to match ODBC behavior.
+# By default, skiLift uppercases identifiers to match ODBC behavior.
 # In raw SQL, reference columns in uppercase (quoted or unquoted):
 dbGetQuery(con, 'SELECT "CITY", "TEMP_C" FROM DEMO_CITIES WHERE "TEMP_C" > 25')
 
@@ -194,10 +194,10 @@ if (requireNamespace("nanoarrow", quietly = TRUE)) {
 head(dbListObjects(con))
 
 # 1-component prefix -> schemas in a database:
-dbListObjects(con, prefix = Id(catalog = "RSNOWFLAKE"))
+dbListObjects(con, prefix = Id(catalog = "SKILIFT"))
 
 # 2-component prefix -> tables in a schema:
-dbListObjects(con, prefix = Id(catalog = "RSNOWFLAKE", schema = "PUBLIC"))
+dbListObjects(con, prefix = Id(catalog = "SKILIFT", schema = "PUBLIC"))
 
 
 # ── 10. Cleanup ─────────────────────────────────────────────────────────────

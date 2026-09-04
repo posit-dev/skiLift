@@ -1,12 +1,12 @@
 # =============================================================================
-# RSnowflake -- DBI Connector Config
+# skiLift -- DBI Connector Config
 # =============================================================================
-# R environment for RSnowflake notebooks. Includes DBI, httr2, jsonlite,
+# R environment for skiLift notebooks. Includes DBI, httr2, jsonlite,
 # and nanoarrow for the SQL API v2 connector.
 #
 # Usage (single cell):
 #   from sfnb_setup import setup_notebook
-#   setup_notebook(config="rsnowflake_config.yaml", packages=["RSnowflake"])
+#   setup_notebook(config="skilift_config.yaml", packages=["skiLift"])
 #
 # All sections below are OPTIONAL -- sensible defaults are used when omitted.
 # =============================================================================
@@ -59,7 +59,7 @@ languages:
       adbc: false
       duckdb: false
     tarballs:
-      RSnowflake: "https://github.com/Snowflake-Labs/RSnowflake/releases/download/v0.2.1/RSnowflake_0.2.1.tar.gz"
+      skiLift: "https://github.com/posit-dev/skiLift/releases/download/v0.2.1/skiLift_0.2.1.tar.gz"
 
   scala:
     enabled: false

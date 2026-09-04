@@ -1,6 +1,6 @@
 sf_user_agent <- function() {
   paste0(
-    "RSnowflake/", utils::packageVersion("RSnowflake"),
+    "skiLift/", utils::packageVersion("skiLift"),
     " R/", getRversion(),
     " (", Sys.info()[["sysname"]], ")"
   )

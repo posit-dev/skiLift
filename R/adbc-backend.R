@@ -1,6 +1,6 @@
 # ADBC Backend (Primary in Workspace, Optional Accelerator Outside)
 # =============================================================================
-# When adbcsnowflake and adbcdrivermanager are installed, RSnowflake routes
+# When adbcsnowflake and adbcdrivermanager are installed, skiLift routes
 # ALL DBI operations through ADBC: reads, writes, DDL (dbExecute,
 # dbCreateTable, dbRemoveTable), and metadata (dbListTables, dbListFields).
 # This eliminates the need for the public endpoint in the EAI.
@@ -62,7 +62,7 @@
     return(cached)
   }
 
-  backend <- getOption("RSnowflake.backend", "auto")
+  backend <- getOption("skiLift.backend", "auto")
   if (identical(backend, "rest")) return(NULL)
 
   t0 <- proc.time()
@@ -74,7 +74,7 @@
     return(NULL)
   }
 
-  if (isTRUE(getOption("RSnowflake.verbose", FALSE))) {
+  if (isTRUE(getOption("skiLift.verbose", FALSE))) {
     cli_inform(c("i" = "ADBC backend init took {.val {round(elapsed, 1)}}s."))
   }
 
@@ -121,7 +121,7 @@
     db <- do.call(adbcdrivermanager::adbc_database_init, args)
     adbc_con <- adbcdrivermanager::adbc_connection_init(db)
 
-    if (isTRUE(getOption("RSnowflake.verbose", FALSE))) {
+    if (isTRUE(getOption("skiLift.verbose", FALSE))) {
       if (nzchar(spcs_host)) {
         cli_inform(c(
           "i" = "ADBC backend initialised (Workspace: SPCS OAuth via internal host).",
@@ -134,7 +134,7 @@
 
     list(db = db, con = adbc_con)
   }, error = function(e) {
-    if (!identical(getOption("RSnowflake.backend", "auto"), "auto")) {
+    if (!identical(getOption("skiLift.backend", "auto"), "auto")) {
       in_workspace <- nzchar(Sys.getenv("SNOWFLAKE_HOST", ""))
       hints <- conditionMessage(e)
       if (in_workspace && grepl("auth|token|oauth|network", hints, ignore.case = TRUE)) {
@@ -155,7 +155,7 @@
   })
 }
 
-#' Map RSnowflake auth to ADBC driver arguments
+#' Map skiLift auth to ADBC driver arguments
 #' @returns Named list of ADBC auth options.
 #' @noRd
 .adbc_auth_args <- function(conn) {
@@ -229,7 +229,7 @@
 #' @param mode ADBC ingest mode: "default", "create", or "append".
 #' @noRd
 .adbc_write_table <- function(adbc, table_name, df, mode = "append") {
-  verbose <- isTRUE(getOption("RSnowflake.verbose", FALSE))
+  verbose <- isTRUE(getOption("skiLift.verbose", FALSE))
   parts <- strsplit(table_name, ".", fixed = TRUE)[[1L]]
 
   if (length(parts) >= 2L) {

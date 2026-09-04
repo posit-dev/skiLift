@@ -12,7 +12,7 @@
 
 
 
-<title>Getting Started with RSnowflake</title>
+<title>Getting Started with skiLift</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -336,22 +336,22 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
-<h1 class="title toc-ignore">Getting Started with RSnowflake</h1>
+<h1 class="title toc-ignore">Getting Started with skiLift</h1>
 
 
 
-<p>RSnowflake is a DBI-compliant R interface to Snowflake that connects
+<p>skiLift is a DBI-compliant R interface to Snowflake that connects
 directly to the Snowflake SQL API via HTTPS. It has no dependency on
 ODBC, JDBC, or Python.</p>
 <div id="installation" class="section level2">
 <h2>Installation</h2>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># From GitHub (development version):</span></span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="co"># install.packages(&quot;pak&quot;)</span></span>
-<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>pak<span class="sc">::</span><span class="fu">pak</span>(<span class="st">&quot;Snowflake-Labs/RSnowflake&quot;</span>)</span></code></pre></div>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>pak<span class="sc">::</span><span class="fu">pak</span>(<span class="st">&quot;posit-dev/skiLift&quot;</span>)</span></code></pre></div>
 </div>
 <div id="authentication" class="section level2">
 <h2>Authentication</h2>
-<p>RSnowflake supports several authentication methods. The recommended
+<p>skiLift supports several authentication methods. The recommended
 approach is to configure a profile in
 <code>~/.snowflake/connections.toml</code>, the same file used by the
 Snowflake Python connector and Snowflake CLI.</p>
@@ -367,7 +367,7 @@ Snowflake Python connector and Snowflake CLI.</p>
 <span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="dt">warehouse</span> <span class="op">=</span> <span class="st">&quot;MY_WH&quot;</span></span></code></pre></div>
 <p>Then connect without any arguments:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">library</span>(DBI)</span>
-<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">library</span>(RSnowflake)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">library</span>(skiLift)</span>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a></span>
 <span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">dbConnect</span>(<span class="fu">Snowflake</span>())</span></code></pre></div>
 <p>Or select a named profile:</p>
@@ -421,7 +421,7 @@ session token is read from the environment:</p>
 <span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="fu">dbRemoveTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>)</span></code></pre></div>
 <div id="bulk-write-methods" class="section level3">
 <h3>Bulk Write Methods</h3>
-<p>RSnowflake automatically picks the fastest write path for your
+<p>skiLift automatically picks the fastest write path for your
 environment. The <code>upload_method</code> option controls this:</p>
 <table>
 <colgroup>
@@ -461,7 +461,7 @@ path)</td>
 </tbody>
 </table>
 <p>In <strong>Workspace Notebooks</strong>, <code>&quot;auto&quot;</code> routes
-bulk writes (above <code>RSnowflake.bulk_write_threshold</code> cells)
+bulk writes (above <code>skiLift.bulk_write_threshold</code> cells)
 through the Python Snowpark session via reticulate. This uses the
 internal SPCS network path and is ~10x faster than ADBC for writes in
 Workspace (~2.5s vs ~21s for 50K rows).</p>
@@ -469,16 +469,16 @@ Workspace (~2.5s vs ~21s for 50K rows).</p>
 ADBC when available, which outperforms literal INSERT for datasets above
 ~20K rows.</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Force a specific method</span></span>
-<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">options</span>(<span class="at">RSnowflake.upload_method =</span> <span class="st">&quot;snowpark&quot;</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.upload_method =</span> <span class="st">&quot;snowpark&quot;</span>)</span>
 <span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;big_table&quot;</span>, large_df)</span>
 <span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a></span>
 <span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co"># Adjust the threshold (cells = rows * cols)</span></span>
-<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="fu">options</span>(<span class="at">RSnowflake.bulk_write_threshold =</span> <span class="dv">100000</span><span class="dt">L</span>)</span></code></pre></div>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.bulk_write_threshold =</span> <span class="dv">100000</span><span class="dt">L</span>)</span></code></pre></div>
 </div>
 </div>
 <div id="identifier-case-handling" class="section level2">
 <h2>Identifier Case Handling</h2>
-<p>By default, RSnowflake uppercases table and column names in DDL/DML
+<p>By default, skiLift uppercases table and column names in DDL/DML
 operations (<code>dbWriteTable</code>, <code>dbCreateTable</code>,
 <code>dbReadTable</code>, etc.). This matches the behavior of
 Snowflake’s ODBC driver and of Snowflake itself when identifiers are
@@ -488,7 +488,7 @@ unquoted:</p>
 <span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#&gt; [1] &quot;ID&quot; &quot;NAME&quot;</span></span></code></pre></div>
 <p>To preserve the original case of identifiers (useful for DBItest
 compliance or when you need lowercase column names), set:</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">options</span>(<span class="at">RSnowflake.identifier_case =</span> <span class="st">&quot;preserve&quot;</span>)</span>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.identifier_case =</span> <span class="st">&quot;preserve&quot;</span>)</span>
 <span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a></span>
 <span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;my_table&quot;</span>, <span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span>, <span class="at">name =</span> <span class="st">&quot;Alice&quot;</span>), <span class="at">overwrite =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="fu">dbListFields</span>(con, <span class="st">&quot;my_table&quot;</span>)</span>
@@ -501,7 +501,7 @@ table-level operations.</p>
 <div id="adbc-acceleration-optional" class="section level2">
 <h2>ADBC Acceleration (optional)</h2>
 <p>When the <code>adbcsnowflake</code> and
-<code>adbcdrivermanager</code> packages are installed, RSnowflake can
+<code>adbcdrivermanager</code> packages are installed, skiLift can
 use the ADBC (Arrow Database Connectivity) backend for Arrow-native
 reads and PUT + COPY INTO bulk writes. This is particularly beneficial
 for large datasets outside of Workspace Notebooks.</p>
@@ -511,16 +511,16 @@ for large datasets outside of Workspace Notebooks.</p>
 <span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a></span>
 <span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co"># ADBC is used automatically in &#39;auto&#39; mode for large writes</span></span>
 <span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co"># Force it for reads:</span></span>
-<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="fu">options</span>(<span class="at">RSnowflake.backend =</span> <span class="st">&quot;adbc&quot;</span>)</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.backend =</span> <span class="st">&quot;adbc&quot;</span>)</span>
 <span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">dbGetQuery</span>(con, <span class="st">&quot;SELECT * FROM big_table&quot;</span>)</span>
-<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a><span class="fu">options</span>(<span class="at">RSnowflake.backend =</span> <span class="st">&quot;auto&quot;</span>)</span></code></pre></div>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.backend =</span> <span class="st">&quot;auto&quot;</span>)</span></code></pre></div>
 <p>See <code>WORKSPACE_ADBC.md</code> in the package for
 Workspace-specific ADBC constraints (EAI network rules, PAT auth, stage
 host whitelisting).</p>
 </div>
 <div id="arrow-interface" class="section level2">
 <h2>Arrow Interface</h2>
-<p>RSnowflake supports the DBI Arrow methods for compatibility with
+<p>skiLift supports the DBI Arrow methods for compatibility with
 packages and workflows that expect them. This requires the
 <code>nanoarrow</code> package.</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>stream <span class="ot">&lt;-</span> <span class="fu">dbGetQueryArrow</span>(con, <span class="st">&quot;SELECT * FROM my_table&quot;</span>)</span>
@@ -534,7 +534,7 @@ server-side Arrow transport is planned for a future release.</p>
 </div>
 <div id="dbplyr-integration" class="section level2">
 <h2>dbplyr Integration</h2>
-<p>RSnowflake integrates with dbplyr so you can use dplyr verbs that are
+<p>skiLift integrates with dbplyr so you can use dplyr verbs that are
 translated to Snowflake SQL and executed lazily:</p>
 <div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
 <span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a></span>
@@ -549,7 +549,7 @@ translated to Snowflake SQL and executed lazily:</p>
 dbplyr provides for Snowflake (e.g. <code>floor_date()</code> to
 <code>DATE_TRUNC</code>, <code>paste0()</code> to
 <code>ARRAY_TO_STRING</code>, <code>ifelse()</code> to
-<code>IFF</code>), RSnowflake adds translations for 17 Snowflake
+<code>IFF</code>), skiLift adds translations for 17 Snowflake
 functions that dbplyr does not cover. These let you use
 Snowflake-specific SQL functions directly in dplyr pipelines without
 falling back to <code>sql()</code>.</p>

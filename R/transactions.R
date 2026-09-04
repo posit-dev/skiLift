@@ -8,7 +8,7 @@
 .txn_not_supported <- function() {
   cli_abort(c(
     "Transactions require a session-based connection.",
-    "i" = "Set {.code options(RSnowflake.use_session = TRUE)} before connecting.",
+    "i" = "Set {.code options(skiLift.use_session = TRUE)} before connecting.",
     "i" = "Without a session, the SQL API v2 is stateless per-request."
   ))
 }

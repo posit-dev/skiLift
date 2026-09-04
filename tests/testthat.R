@@ -1,4 +1,4 @@
 library(testthat)
-library(RSnowflake)
+library(skiLift)
 
-test_check("RSnowflake")
+test_check("skiLift")

@@ -1,14 +1,14 @@
 -- =========================================================================
--- EAI Setup: demo_rsnowflake
+-- EAI Setup: demo_skilift
 -- =========================================================================
 -- Network Rule and External Access Integration for this notebook.
 -- Run as a role with CREATE INTEGRATION privileges (e.g. ACCOUNTADMIN).
 --
 -- After running, attach the EAI to your notebook in Snowsight:
---   Notebook settings > External access > DEMO_RSNOWFLAKE_EAI
+--   Notebook settings > External access > DEMO_SKILIFT_EAI
 -- =========================================================================
 
-CREATE OR REPLACE NETWORK RULE DEMO_RSNOWFLAKE_NR
+CREATE OR REPLACE NETWORK RULE DEMO_SKILIFT_NR
   MODE = EGRESS
   TYPE = HOST_PORT
   VALUE_LIST = (
@@ -28,9 +28,9 @@ CREATE OR REPLACE NETWORK RULE DEMO_RSNOWFLAKE_NR
     'repo.anaconda.com'
   );
 
-CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION DEMO_RSNOWFLAKE_EAI
-  ALLOWED_NETWORK_RULES = (DEMO_RSNOWFLAKE_NR)
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION DEMO_SKILIFT_EAI
+  ALLOWED_NETWORK_RULES = (DEMO_SKILIFT_NR)
   ENABLED = TRUE;
 
 -- Grant usage to your notebook role (uncomment and adjust):
--- GRANT USAGE ON INTEGRATION DEMO_RSNOWFLAKE_EAI TO ROLE <YOUR_ROLE>;
+-- GRANT USAGE ON INTEGRATION DEMO_SKILIFT_EAI TO ROLE <YOUR_ROLE>;

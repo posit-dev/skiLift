@@ -27,8 +27,8 @@ Snowflake <- function() {
 #' @export
 setMethod("dbGetInfo", "SnowflakeDriver", function(dbObj, ...) {
   list(
-    driver.version = utils::packageVersion("RSnowflake"),
-    client.version = utils::packageVersion("RSnowflake"),
+    driver.version = utils::packageVersion("skiLift"),
+    client.version = utils::packageVersion("skiLift"),
     max.connections = Inf
   )
 })
@@ -193,7 +193,7 @@ setMethod("dbConnect", "SnowflakeDriver",
     }
 
     # Optionally establish a persistent session for transactions & internal protocol
-    use_session <- isTRUE(getOption("RSnowflake.use_session", FALSE))
+    use_session <- isTRUE(getOption("skiLift.use_session", FALSE))
     if (use_session) {
       tryCatch({
         session_info <- sf_session_login(account, auth)

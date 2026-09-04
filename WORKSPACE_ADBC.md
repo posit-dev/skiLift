@@ -1,6 +1,6 @@
 # ADBC in Snowflake Workspace Notebooks
 
-RSnowflake optionally accelerates reads and writes via the ADBC Snowflake
+skiLift optionally accelerates reads and writes via the ADBC Snowflake
 Go driver (`adbcsnowflake`). In Workspace Notebooks (SPCS containers),
 ADBC connects via the internal SPCS gateway using the container's OAuth
 token -- no PAT, public endpoint, or authentication policy configuration
@@ -135,16 +135,16 @@ was updated to route OAuth to `SNOWFLAKE_HOST`, Bearer auth works correctly.
 
 ## Constraint 7: Bulk Write Threshold and Routing
 
-RSnowflake v0.5+ auto-routes bulk writes based on environment:
+skiLift v0.5+ auto-routes bulk writes based on environment:
 
 | Environment | Auto-route (above threshold) | Fallback |
 |---|---|---|
 | **Workspace** | ADBC bulk ingest (internal host) | Snowpark `write_pandas`, then literal |
 | **External** | ADBC bulk ingest | literal INSERT |
 
-The threshold is `RSnowflake.bulk_write_threshold` (200,000 cells in
+The threshold is `skiLift.bulk_write_threshold` (200,000 cells in
 Workspace, 50,000 cells externally). The old name
-`RSnowflake.adbc_write_threshold` is kept as a backwards-compatible alias.
+`skiLift.adbc_write_threshold` is kept as a backwards-compatible alias.
 
 **Routing change (March 2026):** In Workspace, ADBC is now preferred over
 Snowpark `write_pandas` for auto writes. ADBC via the internal SPCS host
@@ -171,8 +171,8 @@ kernel. The R data.frame is converted in-memory via `reticulate::r_to_py()`
 ### Snowpark write_pandas outside Workspace
 
 Requires `snowflake-snowpark-python` and `pandas` in the Python environment.
-RSnowflake creates a Snowpark session from the connection's credentials
-(key-pair JWT or PAT). Set `options(RSnowflake.upload_method = "snowpark")`
+skiLift creates a Snowpark session from the connection's credentials
+(key-pair JWT or PAT). Set `options(skiLift.upload_method = "snowpark")`
 to opt in.
 
 ## PAT Authentication (Fallback / External Use)

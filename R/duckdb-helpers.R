@@ -1,7 +1,7 @@
 # DuckDB Caching Helpers (Companion, Not Embedded)
 # =============================================================================
 # DuckDB is NOT part of the DBI driver -- it is a separate workflow layer.
-# These convenience functions bridge RSnowflake and DuckDB for the common
+# These convenience functions bridge skiLift and DuckDB for the common
 # pattern: "query Snowflake once, analyse locally with dplyr."
 #
 # All functions require the `duckdb` package (listed in Suggests).
@@ -31,7 +31,7 @@ sf_cache_in_duckdb <- function(sf_con, sql, table_name,
   data <- DBI::dbGetQuery(sf_con, sql)
   DBI::dbWriteTable(duck_con, table_name, data, overwrite = overwrite)
 
-  if (isTRUE(getOption("RSnowflake.verbose", FALSE))) {
+  if (isTRUE(getOption("skiLift.verbose", FALSE))) {
     cli_inform(c(
       "i" = "Cached {nrow(data)} rows into DuckDB table {.val {table_name}}."
     ))

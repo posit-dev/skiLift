@@ -1,4 +1,4 @@
-# RSnowflake <img src="man/figures/logo.png" align="right" height="139" />
+# skiLift <img src="man/figures/logo.png" align="right" height="139" />
 
 > **Community Project -- Not Officially Supported**
 > This is a community-developed project from
@@ -6,7 +6,7 @@
 > Snowflake offering. It is provided **as-is** without warranty or official
 > Snowflake support. Use it for prototyping and experimentation; production
 > use is at your own risk. Feedback, bug reports, and contributions are
-> welcome via [GitHub Issues](https://github.com/Snowflake-Labs/RSnowflake/issues).
+> welcome via [GitHub Issues](https://github.com/posit-dev/skiLift/issues).
 
 > **Author:** [Simon Field](https://www.linkedin.com/in/fieldy6961) — SnowCAT
 
@@ -16,7 +16,7 @@ ODBC, JDBC, or Python.
 
 > **Companion package:** For Snowflake ML features (Model Registry, Feature
 > Store, Datasets, SPCS model serving), see
-> [**snowflakeR**](https://github.com/Snowflake-Labs/snowflakeR).
+> [**skiPatrol**](https://github.com/posit-dev/skiPatrol).
 
 ## Features
 
@@ -45,20 +45,20 @@ ODBC, JDBC, or Python.
 
 ```r
 # install.packages("pak")
-pak::pak("Snowflake-Labs/RSnowflake")
+pak::pak("posit-dev/skiLift")
 ```
 
 ## Vignettes
 
-After installation, browse locally with `browseVignettes("RSnowflake")` or open:
+After installation, browse locally with `browseVignettes("skiLift")` or open:
 
 ```r
-vignette("getting-started", package = "RSnowflake")
-vignette("workspace-rsnowflake", package = "RSnowflake")
+vignette("getting-started", package = "skiLift")
+vignette("workspace-skilift", package = "skiLift")
 ```
 
 **getting-started** covers DBI usage, authentication (JWT, PAT, Workspace),
-bulk writes, ADBC options, dbplyr, and Arrow helpers. **workspace-rsnowflake**
+bulk writes, ADBC options, dbplyr, and Arrow helpers. **workspace-skilift**
 focuses on Workspace Notebooks: Python/`%%R` bootstrap order, EAI and installs
 for optional ADBC, the internal `SNOWFLAKE_HOST` gateway, and links to
 `WORKSPACE_ADBC.md` on GitHub.
@@ -67,7 +67,7 @@ for optional ADBC, the internal `SNOWFLAKE_HOST` gateway, and links to
 
 ```r
 library(DBI)
-library(RSnowflake)
+library(skiLift)
 
 # Connect using a connections.toml profile
 con <- dbConnect(Snowflake(), name = "my_profile")
@@ -133,11 +133,11 @@ con <- dbConnect(Snowflake())
 
 For PAT details, the **`SNOWFLAKE_*`** variables `setup_notebook()` exports,
 `%%R` / Snowpark prerequisites, and **ADBC** behaviour in Workspace versus
-local R, see **`vignette("getting-started", package = "RSnowflake")`**.
+local R, see **`vignette("getting-started", package = "skiLift")`**.
 
 ## Identifier Case Handling
 
-By default, RSnowflake uppercases unquoted identifiers in DDL/DML
+By default, skiLift uppercases unquoted identifiers in DDL/DML
 operations to match Snowflake's native behaviour and the ODBC driver:
 
 ```r
@@ -146,17 +146,17 @@ dbListFields(con, "my_table")
 #> [1] "ID"
 ```
 
-Set `options(RSnowflake.identifier_case = "preserve")` to keep the
+Set `options(skiLift.identifier_case = "preserve")` to keep the
 original case (useful for DBItest or when lowercase column names are
 required).
 
-## Using with snowflakeR
+## Using with skiPatrol
 
-If you use the companion `snowflakeR` package for ML workflows, you can
-obtain an RSnowflake connection from an existing `sfr_connection`:
+If you use the companion `skiPatrol` package for ML workflows, you can
+obtain an skiLift connection from an existing `sfr_connection`:
 
 ```r
-library(snowflakeR)
+library(skiPatrol)
 conn    <- sfr_connect()
 dbi_con <- sfr_dbi_connection(conn)
 

@@ -7,7 +7,7 @@
 #    overhead compared to dbGetQuery and exists for DBI interface compatibility.
 #
 # 2. Native Arrow transport (session + internal protocol): When a session is
-#    active and RSnowflake.use_native_arrow is TRUE, queries are submitted via
+#    active and skiLift.use_native_arrow is TRUE, queries are submitted via
 #    the internal protocol requesting Arrow IPC format.  Results arrive as
 #    base64-encoded Arrow IPC (first partition) and pre-signed cloud URLs
 #    (subsequent partitions).  This provides 5-10x improvement for large results.
@@ -37,7 +37,7 @@ sf_fetch_all_as_arrow_stream <- function(con, resp_body, meta) {
     combined <- first_frame
   } else {
     remaining <- seq.int(1L, n_parts - 1L)
-    use_parallel <- isTRUE(getOption("RSnowflake.parallel_fetch", TRUE)) &&
+    use_parallel <- isTRUE(getOption("skiLift.parallel_fetch", TRUE)) &&
                     length(remaining) > 1L
 
     if (use_parallel) {

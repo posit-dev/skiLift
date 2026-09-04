@@ -1,8 +1,8 @@
 ---
-title: "RSnowflake in Custom SPCS Services"
+title: "skiLift in Custom SPCS Services"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{RSnowflake in Custom SPCS Services}
+  %\VignetteIndexEntry{skiLift in Custom SPCS Services}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -15,16 +15,16 @@ knitr::opts_chunk$set(
 )
 ```
 
-This vignette covers **RSnowflake** in **custom Snowpark Container Services
+This vignette covers **skiLift** in **custom Snowpark Container Services
 (SPCS)** workloads — for example **RStudio Server** deployed as a long-running
 service. It is **not** the Workspace Notebook path (`%%R` via rpy2); see
-**`vignette("workspace-rsnowflake", package = "RSnowflake")`** for that.
+**`vignette("workspace-skilift", package = "skiLift")`** for that.
 
 For the full deploy kit (Docker, service spec, smoke tests), see the
-**snowflakeR** package:
+**skiPatrol** package:
 
 ```r
-system.file("rstudio-spcs", package = "snowflakeR")
+system.file("rstudio-spcs", package = "skiPatrol")
 ```
 
 Or the Hitchhiker's Guide chapter **RStudio Server on SPCS**.
@@ -44,13 +44,13 @@ via **container environment variables** in the service spec.
 
 ```r
 library(DBI)
-library(RSnowflake)
+library(skiLift)
 
 con <- dbConnect(Snowflake())
 dbGetQuery(con, "SELECT CURRENT_USER(), CURRENT_WAREHOUSE()")
 ```
 
-RSnowflake resolves auth in this order (`RSnowflake/R/auth.R`):
+skiLift resolves auth in this order (`skiLift/R/auth.R`):
 
 1. Explicit bearer `token` argument
 2. **SPCS OAuth** — `SNOWFLAKE_HOST` + token file
@@ -70,7 +70,7 @@ env:
   SNOWFLAKE_ROLE: MY_ROLE
 ```
 
-RSnowflake passes these to the SQL API session. **Do not** rely on:
+skiLift passes these to the SQL API session. **Do not** rely on:
 
 ```r
 dbExecute(con, "USE WAREHOUSE MY_WH")   # not supported — SQL REST API
@@ -93,12 +93,12 @@ version, or fall back to PAT/key-pair against the public endpoint (with EAI).
 
 ## RStudio Connections pane
 
-RSnowflake registers with the RStudio Connections pane. Probe messages tagged
-`[RSnowflake pane]` are normal when the pane checks driver availability. To
+skiLift registers with the RStudio Connections pane. Probe messages tagged
+`[skiLift pane]` are normal when the pane checks driver availability. To
 show verbose pane diagnostics:
 
 ```r
-options(rsnowflake.connections_pane_verbose = TRUE)
+options(skilift.connections_pane_verbose = TRUE)
 ```
 
 ## Stage file I/O
@@ -115,19 +115,19 @@ volumes:
 ```
 
 Read and write via the filesystem path in R. Do not use `GET`/`PUT` SQL with
-RSnowflake.
+skiLift.
 
 ## Optional ADBC
 
-When `adbcsnowflake` is baked into the image, RSnowflake can use Arrow-native
+When `adbcsnowflake` is baked into the image, skiLift can use Arrow-native
 bulk paths via the same internal gateway. See **`WORKSPACE_ADBC.md`** in the
-RSnowflake repository for gateway and redirect-chain detail (applies to SPCS
+skiLift repository for gateway and redirect-chain detail (applies to SPCS
 containers as well as Workspace).
 
-## Companion: snowflakeR
+## Companion: skiPatrol
 
 ML platform APIs (`sfr_connect()`, Feature Store, Model Registry) require
 Snowpark Python via **reticulate**. In custom SPCS services,
 **`sfr_connect()` does not auto-detect** the environment — use
 **`sfr_connect_spcs()`** from the rstudio-spcs kit or
-**`vignette("rstudio-spcs", package = "snowflakeR")`**.
+**`vignette("rstudio-spcs", package = "skiPatrol")`**.

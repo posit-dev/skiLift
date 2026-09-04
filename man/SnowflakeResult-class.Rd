@@ -59,7 +59,7 @@
 }
 \description{
 An S4 class representing the result of a query against Snowflake.
-Created by \code{\link[=dbSendQuery]{dbSendQuery()}} or \code{\link[=dbSendStatement]{dbSendStatement()}}.
+Created by \code{\link[DBI:dbSendQuery]{DBI::dbSendQuery()}} or \code{\link[DBI:dbSendStatement]{DBI::dbSendStatement()}}.
 }
 \section{Slots}{
 

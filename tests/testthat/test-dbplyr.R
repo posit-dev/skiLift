@@ -50,7 +50,7 @@ test_that("Snowflake paste0 translates to ARRAY_TO_STRING", {
 })
 
 # ---------------------------------------------------------------------------
-# RSnowflake-specific Snowflake scalar translations
+# skiLift-specific Snowflake scalar translations
 # ---------------------------------------------------------------------------
 
 .make_test_con <- function() {
@@ -147,7 +147,7 @@ test_that("hash scalar translation handles variadic args", {
 })
 
 # ---------------------------------------------------------------------------
-# RSnowflake-specific Snowflake aggregate translations
+# skiLift-specific Snowflake aggregate translations
 # ---------------------------------------------------------------------------
 
 test_that("Semi-structured aggregate translations produce correct SQL", {

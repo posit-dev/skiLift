@@ -98,7 +98,7 @@ test_that(".adbc_auth_args returns empty list for unknown auth type", {
 
 test_that(".ensure_adbc returns NULL when backend is 'rest'", {
   con <- .test_conn()
-  withr::with_options(list(RSnowflake.backend = "rest"), {
+  withr::with_options(list(skiLift.backend = "rest"), {
     expect_null(.ensure_adbc(con))
   })
 })
@@ -117,7 +117,7 @@ test_that(".ensure_adbc caches result in connection state", {
   mockr::with_mock(
     .init_adbc_backend = function(conn) fake,
     {
-      withr::with_options(list(RSnowflake.backend = "auto"), {
+      withr::with_options(list(skiLift.backend = "auto"), {
         result <- .ensure_adbc(con)
         expect_identical(result, fake)
         expect_identical(con@.state$adbc, fake)
@@ -131,7 +131,7 @@ test_that(".ensure_adbc returns NULL when packages unavailable", {
   mockr::with_mock(
     .init_adbc_backend = function(conn) NULL,
     {
-      withr::with_options(list(RSnowflake.backend = "auto"), {
+      withr::with_options(list(skiLift.backend = "auto"), {
         expect_null(.ensure_adbc(con))
       })
     }
@@ -144,7 +144,7 @@ test_that(".ensure_adbc caches failed init and does not retry", {
   mockr::with_mock(
     .init_adbc_backend = function(conn) { init_count <<- init_count + 1L; NULL },
     {
-      withr::with_options(list(RSnowflake.backend = "auto"), {
+      withr::with_options(list(skiLift.backend = "auto"), {
         expect_null(.ensure_adbc(con))
         expect_null(.ensure_adbc(con))
         expect_equal(init_count, 1L)
@@ -169,9 +169,9 @@ test_that(".insert_data routes to literal for small data in auto mode", {
     {
       withr::with_envvar(c(SNOWFLAKE_HOST = NA), {
         withr::with_options(list(
-          RSnowflake.upload_method = "auto",
-          RSnowflake.bulk_write_threshold = 1000L,
-          RSnowflake.adbc_write_threshold = 1000L
+          skiLift.upload_method = "auto",
+          skiLift.bulk_write_threshold = 1000L,
+          skiLift.adbc_write_threshold = 1000L
         ), {
           df <- data.frame(x = 1:10)
           .insert_data(con, '"T"', df)
@@ -197,9 +197,9 @@ test_that(".insert_data attempts ADBC for large data in auto mode (outside Works
     {
       withr::with_envvar(c(SNOWFLAKE_HOST = NA), {
         withr::with_options(list(
-          RSnowflake.upload_method = "auto",
-          RSnowflake.bulk_write_threshold = 10L,
-          RSnowflake.adbc_write_threshold = 10L
+          skiLift.upload_method = "auto",
+          skiLift.bulk_write_threshold = 10L,
+          skiLift.adbc_write_threshold = 10L
         ), {
           df <- data.frame(a = 1:5, b = 6:10, c = 11:15)
           .insert_data(con, '"T"', df)
@@ -225,9 +225,9 @@ test_that(".insert_data stays on literal when below threshold in auto mode", {
     {
       withr::with_envvar(c(SNOWFLAKE_HOST = NA), {
         withr::with_options(list(
-          RSnowflake.upload_method = "auto",
-          RSnowflake.bulk_write_threshold = 999999L,
-          RSnowflake.adbc_write_threshold = 999999L
+          skiLift.upload_method = "auto",
+          skiLift.bulk_write_threshold = 999999L,
+          skiLift.adbc_write_threshold = 999999L
         ), {
           df <- data.frame(x = 1:10)
           .insert_data(con, '"T"', df)
@@ -249,7 +249,7 @@ test_that(".insert_data falls back to literal when method='adbc' but no backend"
       list()
     },
     {
-      withr::with_options(list(RSnowflake.upload_method = "adbc"), {
+      withr::with_options(list(skiLift.upload_method = "adbc"), {
         df <- data.frame(x = 1L)
         expect_warning(.insert_data(con, '"T"', df), "ADBC")
       })
@@ -267,7 +267,7 @@ test_that(".insert_data respects method='bind' override with deprecation warning
       list()
     },
     {
-      withr::with_options(list(RSnowflake.upload_method = "bind"), {
+      withr::with_options(list(skiLift.upload_method = "bind"), {
         df <- data.frame(x = 1L)
         expect_warning(.insert_data(con, '"T"', df), "deprecated")
       })
@@ -308,8 +308,8 @@ test_that(".insert_data routes to Snowpark in Workspace auto mode for large data
     {
       withr::with_envvar(c(SNOWFLAKE_HOST = "fake-spcs.snowflakecomputing.app"), {
         withr::with_options(list(
-          RSnowflake.upload_method = "auto",
-          RSnowflake.bulk_write_threshold = 10L
+          skiLift.upload_method = "auto",
+          skiLift.bulk_write_threshold = 10L
         ), {
           df <- data.frame(a = 1:5, b = 6:10, c = 11:15)
           .insert_data(con, '"T"', df)
@@ -335,8 +335,8 @@ test_that(".insert_data falls back to ADBC in Workspace when Snowpark unavailabl
     {
       withr::with_envvar(c(SNOWFLAKE_HOST = "fake-spcs.snowflakecomputing.app"), {
         withr::with_options(list(
-          RSnowflake.upload_method = "auto",
-          RSnowflake.bulk_write_threshold = 10L
+          skiLift.upload_method = "auto",
+          skiLift.bulk_write_threshold = 10L
         ), {
           df <- data.frame(a = 1:5, b = 6:10, c = 11:15)
           .insert_data(con, '"T"', df)
@@ -358,7 +358,7 @@ test_that(".insert_data routes to Snowpark when method='snowpark'", {
     },
     {
       withr::with_envvar(c(SNOWFLAKE_HOST = NA), {
-        withr::with_options(list(RSnowflake.upload_method = "snowpark"), {
+        withr::with_options(list(skiLift.upload_method = "snowpark"), {
           df <- data.frame(x = 1L)
           .insert_data(con, '"T"', df)
         })
@@ -385,8 +385,8 @@ test_that(".insert_data does NOT use Snowpark outside Workspace in auto mode", {
     {
       withr::with_envvar(c(SNOWFLAKE_HOST = NA), {
         withr::with_options(list(
-          RSnowflake.upload_method = "auto",
-          RSnowflake.bulk_write_threshold = 10L
+          skiLift.upload_method = "auto",
+          skiLift.bulk_write_threshold = 10L
         ), {
           df <- data.frame(a = 1:5, b = 6:10, c = 11:15)
           .insert_data(con, '"T"', df)
@@ -476,34 +476,34 @@ test_that("dbDisconnect works when no ADBC backend present", {
 # ---------------------------------------------------------------------------
 
 test_that("default options are set correctly (non-Workspace)", {
-  on_load <- RSnowflake:::.onLoad
+  on_load <- skiLift:::.onLoad
   withr::with_envvar(c(SNOWFLAKE_HOST = NA), {
     withr::with_options(list(
-      RSnowflake.backend = NULL,
-      RSnowflake.adbc_write_threshold = NULL,
-      RSnowflake.bulk_write_threshold = NULL,
-      RSnowflake.upload_method = NULL
+      skiLift.backend = NULL,
+      skiLift.adbc_write_threshold = NULL,
+      skiLift.bulk_write_threshold = NULL,
+      skiLift.upload_method = NULL
     ), {
-      expect_null(getOption("RSnowflake.backend"))
-      on_load("", "RSnowflake")
-      expect_equal(getOption("RSnowflake.backend"), "auto")
-      expect_equal(getOption("RSnowflake.bulk_write_threshold"), 50000L)
-      expect_equal(getOption("RSnowflake.adbc_write_threshold"), 50000L)
-      expect_equal(getOption("RSnowflake.upload_method"), "auto")
+      expect_null(getOption("skiLift.backend"))
+      on_load("", "skiLift")
+      expect_equal(getOption("skiLift.backend"), "auto")
+      expect_equal(getOption("skiLift.bulk_write_threshold"), 50000L)
+      expect_equal(getOption("skiLift.adbc_write_threshold"), 50000L)
+      expect_equal(getOption("skiLift.upload_method"), "auto")
     })
   })
 })
 
 test_that("Workspace environment raises bulk write threshold", {
-  on_load <- RSnowflake:::.onLoad
+  on_load <- skiLift:::.onLoad
   withr::with_envvar(c(SNOWFLAKE_HOST = "fake-spcs-host.snowflakecomputing.app"), {
     withr::with_options(list(
-      RSnowflake.adbc_write_threshold = NULL,
-      RSnowflake.bulk_write_threshold = NULL
+      skiLift.adbc_write_threshold = NULL,
+      skiLift.bulk_write_threshold = NULL
     ), {
-      on_load("", "RSnowflake")
-      expect_equal(getOption("RSnowflake.bulk_write_threshold"), 200000L)
-      expect_equal(getOption("RSnowflake.adbc_write_threshold"), 200000L)
+      on_load("", "skiLift")
+      expect_equal(getOption("skiLift.bulk_write_threshold"), 200000L)
+      expect_equal(getOption("skiLift.adbc_write_threshold"), 200000L)
     })
   })
 })

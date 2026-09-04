@@ -1,12 +1,12 @@
 # =============================================================================
-# RSnowflake -- Performance Test Config
+# skiLift -- Performance Test Config
 # =============================================================================
-# Extends the base RSnowflake config with ADBC support for Arrow-native
+# Extends the base skiLift config with ADBC support for Arrow-native
 # high-performance reads/writes.
 #
 # Usage (single cell):
 #   from sfnb_setup import setup_notebook
-#   setup_notebook(config="rsnowflake_perf_config.yaml", packages=["RSnowflake"])
+#   setup_notebook(config="skilift_perf_config.yaml", packages=["skiLift"])
 #
 # All sections below are OPTIONAL -- sensible defaults are used when omitted.
 # =============================================================================
@@ -45,7 +45,7 @@ languages:
       adbc: true
       duckdb: false
     tarballs:
-      RSnowflake: "https://github.com/Snowflake-Labs/RSnowflake/releases/download/v0.2.1/RSnowflake_0.2.1.tar.gz"
+      skiLift: "https://github.com/posit-dev/skiLift/releases/download/v0.2.1/skiLift_0.2.1.tar.gz"
 
   scala:
     enabled: false

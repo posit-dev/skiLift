@@ -28,7 +28,7 @@ sf_internal_submit <- function(conn, sql, bindings = NULL) {
     sequenceId         = as.integer(Sys.time()),
     describeOnly       = FALSE,
     parameters         = list(
-      QUERY_TIMEOUT    = getOption("RSnowflake.timeout", 600L)
+      QUERY_TIMEOUT    = getOption("skiLift.timeout", 600L)
     )
   )
 
@@ -49,10 +49,10 @@ sf_internal_submit <- function(conn, sql, bindings = NULL) {
       "User-Agent"    = sf_user_agent()
     ) |>
     httr2::req_body_json(body, auto_unbox = TRUE) |>
-    httr2::req_timeout(getOption("RSnowflake.timeout", 600L)) |>
+    httr2::req_timeout(getOption("skiLift.timeout", 600L)) |>
     httr2::req_error(is_error = function(resp) FALSE) |>
     httr2::req_retry(
-      max_tries    = getOption("RSnowflake.retry_max", 3L),
+      max_tries    = getOption("skiLift.retry_max", 3L),
       is_transient = function(resp) httr2::resp_status(resp) %in% c(429L, 503L)
     )
 
@@ -127,7 +127,7 @@ sf_internal_submit_arrow <- function(conn, sql, bindings = NULL) {
     sequenceId         = as.integer(Sys.time()),
     describeOnly       = FALSE,
     parameters         = list(
-      QUERY_TIMEOUT           = getOption("RSnowflake.timeout", 600L),
+      QUERY_TIMEOUT           = getOption("skiLift.timeout", 600L),
       CLIENT_RESULT_CHUNK_SIZE = 0L
     )
   )
@@ -149,10 +149,10 @@ sf_internal_submit_arrow <- function(conn, sql, bindings = NULL) {
       "User-Agent"    = sf_user_agent()
     ) |>
     httr2::req_body_json(body, auto_unbox = TRUE) |>
-    httr2::req_timeout(getOption("RSnowflake.timeout", 600L)) |>
+    httr2::req_timeout(getOption("skiLift.timeout", 600L)) |>
     httr2::req_error(is_error = function(resp) FALSE) |>
     httr2::req_retry(
-      max_tries    = getOption("RSnowflake.retry_max", 3L),
+      max_tries    = getOption("skiLift.retry_max", 3L),
       is_transient = function(resp) httr2::resp_status(resp) %in% c(429L, 503L)
     )
 

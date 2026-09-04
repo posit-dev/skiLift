@@ -1,8 +1,8 @@
 ---
-title: "Getting Started with RSnowflake"
+title: "Getting Started with skiLift"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Getting Started with RSnowflake}
+  %\VignetteIndexEntry{Getting Started with skiLift}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-RSnowflake is a DBI-compliant R interface to Snowflake that connects
+skiLift is a DBI-compliant R interface to Snowflake that connects
 directly to the Snowflake SQL API via HTTPS. It has no dependency on ODBC,
 JDBC, or Python.
 
@@ -24,12 +24,12 @@ JDBC, or Python.
 ```{r install}
 # From GitHub (development version):
 # install.packages("pak")
-pak::pak("Snowflake-Labs/RSnowflake")
+pak::pak("posit-dev/skiLift")
 ```
 
 ## Authentication
 
-RSnowflake supports several authentication methods. The recommended
+skiLift supports several authentication methods. The recommended
 approach is to configure a profile in `~/.snowflake/connections.toml`,
 the same file used by the Snowflake Python connector and Snowflake CLI.
 
@@ -50,7 +50,7 @@ Then connect without any arguments:
 
 ```{r connect-toml}
 library(DBI)
-library(RSnowflake)
+library(skiLift)
 
 con <- dbConnect(Snowflake())
 ```
@@ -117,7 +117,7 @@ dbRemoveTable(con, "iris_copy")
 
 ### Bulk Write Methods
 
-RSnowflake automatically picks the fastest write path for your environment.
+skiLift automatically picks the fastest write path for your environment.
 The `upload_method` option controls this:
 
 | Method | How it works | Best for |
@@ -128,7 +128,7 @@ The `upload_method` option controls this:
 | `"literal"` | SQL INSERT statements | Small data, maximum compatibility |
 
 In **Workspace Notebooks**, `"auto"` routes bulk writes (above
-`RSnowflake.bulk_write_threshold` cells) through the Python Snowpark session
+`skiLift.bulk_write_threshold` cells) through the Python Snowpark session
 via reticulate. This uses the internal SPCS network path and is ~10x faster
 than ADBC for writes in Workspace (~2.5s vs ~21s for 50K rows).
 
@@ -137,16 +137,16 @@ outperforms literal INSERT for datasets above ~20K rows.
 
 ```{r upload-method}
 # Force a specific method
-options(RSnowflake.upload_method = "snowpark")
+options(skiLift.upload_method = "snowpark")
 dbWriteTable(con, "big_table", large_df)
 
 # Adjust the threshold (cells = rows * cols)
-options(RSnowflake.bulk_write_threshold = 100000L)
+options(skiLift.bulk_write_threshold = 100000L)
 ```
 
 ## Identifier Case Handling
 
-By default, RSnowflake uppercases table and column names in DDL/DML
+By default, skiLift uppercases table and column names in DDL/DML
 operations (`dbWriteTable`, `dbCreateTable`, `dbReadTable`, etc.).
 This matches the behavior of Snowflake's ODBC driver and of Snowflake
 itself when identifiers are unquoted:
@@ -161,7 +161,7 @@ To preserve the original case of identifiers (useful for DBItest
 compliance or when you need lowercase column names), set:
 
 ```{r case-preserve}
-options(RSnowflake.identifier_case = "preserve")
+options(skiLift.identifier_case = "preserve")
 
 dbWriteTable(con, "my_table", data.frame(id = 1, name = "Alice"), overwrite = TRUE)
 dbListFields(con, "my_table")
@@ -175,7 +175,7 @@ controls the implicit casing applied in table-level operations.
 ## ADBC Acceleration (optional)
 
 When the `adbcsnowflake` and `adbcdrivermanager` packages are installed,
-RSnowflake can use the ADBC (Arrow Database Connectivity) backend for
+skiLift can use the ADBC (Arrow Database Connectivity) backend for
 Arrow-native reads and PUT + COPY INTO bulk writes. This is particularly
 beneficial for large datasets outside of Workspace Notebooks.
 
@@ -186,9 +186,9 @@ cat("ADBC available:", has_adbc, "\n")
 
 # ADBC is used automatically in 'auto' mode for large writes
 # Force it for reads:
-options(RSnowflake.backend = "adbc")
+options(skiLift.backend = "adbc")
 df <- dbGetQuery(con, "SELECT * FROM big_table")
-options(RSnowflake.backend = "auto")
+options(skiLift.backend = "auto")
 ```
 
 See `WORKSPACE_ADBC.md` in the package for Workspace-specific ADBC
@@ -196,7 +196,7 @@ constraints (EAI network rules, PAT auth, stage host whitelisting).
 
 ## Arrow Interface
 
-RSnowflake supports the DBI Arrow methods for compatibility with packages
+skiLift supports the DBI Arrow methods for compatibility with packages
 and workflows that expect them. This requires the `nanoarrow` package.
 
 ```{r arrow}
@@ -213,7 +213,7 @@ a future release.
 
 ## dbplyr Integration
 
-RSnowflake integrates with dbplyr so you can use dplyr verbs that are
+skiLift integrates with dbplyr so you can use dplyr verbs that are
 translated to Snowflake SQL and executed lazily:
 
 ```{r dbplyr}
@@ -230,7 +230,7 @@ tbl(con, "my_table") |>
 
 In addition to the ~150 scalar and ~30 aggregate translations that dbplyr
 provides for Snowflake (e.g. `floor_date()` to `DATE_TRUNC`, `paste0()` to
-`ARRAY_TO_STRING`, `ifelse()` to `IFF`), RSnowflake adds translations for
+`ARRAY_TO_STRING`, `ifelse()` to `IFF`), skiLift adds translations for
 17 Snowflake functions that dbplyr does not cover. These let you use
 Snowflake-specific SQL functions directly in dplyr pipelines without
 falling back to `sql()`.

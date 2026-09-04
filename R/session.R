@@ -7,7 +7,7 @@
 #   - Session variables
 #   - (Future) Native Arrow transport via /queries/v1/query-request
 #
-# Session-based auth is opt-in via options(RSnowflake.use_session = TRUE).
+# Session-based auth is opt-in via options(skiLift.use_session = TRUE).
 
 #' Log in to Snowflake and obtain session + master tokens
 #'
@@ -21,11 +21,11 @@ sf_session_login <- function(account, auth) {
 
   login_body <- list(
     data = list(
-      CLIENT_APP_ID       = "RSnowflake",
-      CLIENT_APP_VERSION  = as.character(utils::packageVersion("RSnowflake")),
+      CLIENT_APP_ID       = "skiLift",
+      CLIENT_APP_VERSION  = as.character(utils::packageVersion("skiLift")),
       ACCOUNT_NAME        = toupper(account),
       CLIENT_ENVIRONMENT  = list(
-        APPLICATION = "RSnowflake",
+        APPLICATION = "skiLift",
         OS          = Sys.info()[["sysname"]],
         OS_VERSION  = Sys.info()[["release"]]
       )
@@ -50,7 +50,7 @@ sf_session_login <- function(account, auth) {
       "User-Agent"    = sf_user_agent()
     ) |>
     httr2::req_body_json(login_body, auto_unbox = TRUE) |>
-    httr2::req_timeout(getOption("RSnowflake.timeout", 600L)) |>
+    httr2::req_timeout(getOption("skiLift.timeout", 600L)) |>
     httr2::req_error(is_error = function(resp) FALSE)
 
   resp <- tryCatch(

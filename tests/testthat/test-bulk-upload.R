@@ -54,7 +54,7 @@ test_that(".insert_data_literal respects configurable batch size", {
       list()
     },
     {
-      withr::with_options(list(RSnowflake.insert_batch_size = 3L), {
+      withr::with_options(list(skiLift.insert_batch_size = 3L), {
         df <- data.frame(x = 1:10)
         .insert_data_literal(con, '"TBL"', df)
       })
@@ -175,7 +175,7 @@ test_that(".insert_data routes to bind path with deprecation warning", {
       list()
     },
     {
-      withr::with_options(list(RSnowflake.upload_method = "bind"), {
+      withr::with_options(list(skiLift.upload_method = "bind"), {
         df <- data.frame(x = 1L)
         expect_warning(.insert_data(con, '"T"', df), "deprecated")
       })
@@ -200,7 +200,7 @@ test_that(".insert_data routes to literal path when configured", {
       list()
     },
     {
-      withr::with_options(list(RSnowflake.upload_method = "literal"), {
+      withr::with_options(list(skiLift.upload_method = "literal"), {
         df <- data.frame(x = 1L)
         .insert_data(con, '"T"', df)
       })

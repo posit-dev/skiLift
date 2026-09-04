@@ -13,7 +13,7 @@ test_that(".can_use_native_arrow returns FALSE without session", {
     .state = .new_conn_state()
   )
 
-  withr::with_options(list(RSnowflake.use_native_arrow = TRUE), {
+  withr::with_options(list(skiLift.use_native_arrow = TRUE), {
     expect_false(.can_use_native_arrow(con))
   })
 })
@@ -28,7 +28,7 @@ test_that(".can_use_native_arrow returns FALSE when option disabled", {
     .state = state
   )
 
-  withr::with_options(list(RSnowflake.use_native_arrow = FALSE), {
+  withr::with_options(list(skiLift.use_native_arrow = FALSE), {
     expect_false(.can_use_native_arrow(con))
   })
 })
@@ -43,7 +43,7 @@ test_that(".can_use_native_arrow checks nanoarrow availability", {
     .state = state
   )
 
-  withr::with_options(list(RSnowflake.use_native_arrow = TRUE), {
+  withr::with_options(list(skiLift.use_native_arrow = TRUE), {
     result <- .can_use_native_arrow(con)
     # Result depends on whether nanoarrow is installed locally
     expect_type(result, "logical")
@@ -107,8 +107,8 @@ test_that("sf_fetch_all_native_arrow errors on missing rowsetBase64", {
 # ---------------------------------------------------------------------------
 
 test_that("use_native_arrow defaults to FALSE", {
-  withr::with_options(list(RSnowflake.use_native_arrow = NULL), {
-    val <- getOption("RSnowflake.use_native_arrow", FALSE)
+  withr::with_options(list(skiLift.use_native_arrow = NULL), {
+    val <- getOption("skiLift.use_native_arrow", FALSE)
     expect_false(val)
   })
 })

@@ -3,7 +3,7 @@
 # Fetches multiple JSON partitions concurrently.
 #
 # Strategy cascade (first success wins):
-#   1. parLapply  -- socket cluster, TLS-safe, requires RSnowflake installed
+#   1. parLapply  -- socket cluster, TLS-safe, requires skiLift installed
 #   2. mclapply   -- fork-based, no install needed, safe on Linux (OpenSSL)
 #                    but fails on macOS (SecureTransport can't fork)
 #   3. sequential -- guaranteed fallback
@@ -13,7 +13,7 @@
 
 #' Resolve the effective number of parallel workers
 #'
-#' When `RSnowflake.fetch_workers` is 0 or "auto" (the default), detects the
+#' When `skiLift.fetch_workers` is 0 or "auto" (the default), detects the
 #' host's available CPU cores via `parallel::detectCores()` and reserves one
 #' for the main R thread.  A positive integer is used as-is.  The result is
 #' always clamped to `[1, n_tasks]`.
@@ -26,7 +26,7 @@
 #' @returns Integer number of workers to use.
 #' @noRd
 .resolve_n_workers <- function(n_tasks) {
-  opt <- getOption("RSnowflake.fetch_workers", 0L)
+  opt <- getOption("skiLift.fetch_workers", 0L)
 
   if (is.character(opt) && tolower(opt) == "auto") opt <- 0L
   opt <- suppressWarnings(as.integer(opt))
@@ -69,7 +69,7 @@ sf_fetch_partitions_parallel <- function(con, handle, partition_indices, meta) {
 
   cli_warn(c(
     "!" = "Parallel partition fetch unavailable, using sequential.",
-    "i" = paste0("parLapply requires RSnowflake to be installed; ",
+    "i" = paste0("parLapply requires skiLift to be installed; ",
                  "mclapply failed (likely macOS TLS fork issue).")
   ))
   .fetch_partitions_sequential(con, handle, partition_indices, meta)
@@ -108,13 +108,13 @@ sf_fetch_partitions_parallel <- function(con, handle, partition_indices, meta) {
 
     parallel::clusterExport(cl, c("con", "handle", "meta"), envir = environment())
     parallel::clusterEvalQ(cl, {
-      loadNamespace("RSnowflake")
+      loadNamespace("skiLift")
       loadNamespace("httr2")
     })
 
     parallel::parLapply(cl, partition_indices, function(idx) {
-      part_resp <- RSnowflake:::sf_api_fetch_partition(con, handle, idx)
-      RSnowflake:::.parse_partition_data(part_resp, meta)
+      part_resp <- skiLift:::sf_api_fetch_partition(con, handle, idx)
+      skiLift:::.parse_partition_data(part_resp, meta)
     })
   }, error = function(e) NULL)
 }

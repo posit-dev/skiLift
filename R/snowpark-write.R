@@ -9,7 +9,7 @@
 # installed (they are not pre-installed in the Workspace container today).
 # It routes bulk writes through Python's write_pandas via reticulate, using
 # the active Workspace kernel's Snowpark session.  Outside Workspace, it can
-# create a session from RSnowflake connection credentials.
+# create a session from skiLift connection credentials.
 #
 # Benchmarks (50K rows, Mar 2026):
 #   ADBC via internal host:   ~7s  (preferred)
@@ -82,12 +82,12 @@
     return(NULL)
   }
 
-  if (isTRUE(getOption("RSnowflake.verbose", FALSE))) {
+  if (isTRUE(getOption("skiLift.verbose", FALSE))) {
     in_ws <- nzchar(Sys.getenv("SNOWFLAKE_HOST", ""))
     if (in_ws) {
       cli_inform(c("i" = "Snowpark session acquired (Workspace active session, internal SPCS path)."))
     } else {
-      cli_inform(c("i" = "Snowpark session created from RSnowflake connection credentials."))
+      cli_inform(c("i" = "Snowpark session created from skiLift connection credentials."))
     }
   }
 
@@ -108,7 +108,7 @@
   .snowpark_session_from_conn(conn)
 }
 
-#' Create a Snowpark Session from RSnowflake connection credentials
+#' Create a Snowpark Session from skiLift connection credentials
 #'
 #' Used outside Workspace when the user explicitly opts into
 #' upload_method = "snowpark".  Requires snowflake-snowpark-python
@@ -173,7 +173,7 @@
     return(.insert_data_literal(conn, table_id, df))
   }
 
-  verbose <- isTRUE(getOption("RSnowflake.verbose", FALSE))
+  verbose <- isTRUE(getOption("skiLift.verbose", FALSE))
   plain_name <- gsub('"', "", table_id)
 
   if (verbose) {
