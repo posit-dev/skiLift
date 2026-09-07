@@ -43,8 +43,7 @@ sf_generate_jwt <- function(account, user, private_key_path,
   fp_raw <- openssl::sha256(pub_der)
   fp_b64 <- openssl::base64_encode(fp_raw)
 
-  # Snowflake expects uppercase account (org portion stripped for JWT)
-  acct_upper <- toupper(gsub("\\.", "-", account))
+  acct_upper <- .jwt_account_identifier(account)
   user_upper <- toupper(user)
 
   now <- as.integer(Sys.time())
@@ -74,6 +73,26 @@ sf_generate_jwt <- function(account, user, private_key_path,
   sig_b64 <- .base64url_encode(sig_raw)
 
   paste0(signing_input, ".", sig_b64)
+}
+
+#' Reduce a Snowflake account identifier to the form the JWT iss/sub claims
+#' expect
+#'
+#' Matches Snowflake's documented key-pair JWT algorithm. Most account
+#' identifiers carry a region/cloud-platform suffix (e.g.
+#' `ij38992.eu-west-2.aws`) that must be dropped entirely, not folded in --
+#' only the account-name segment before the first dot goes in the claim.
+#' The `.global` form (replicated org accounts) is the one exception: there
+#' the segment before the first hyphen is the account name and the dot is
+#' part of the identifier itself.
+#' @noRd
+.jwt_account_identifier <- function(account) {
+  if (grepl("\\.global\\b", account, ignore.case = TRUE)) {
+    account <- sub("-.*$", "", account)
+  } else {
+    account <- sub("\\..*$", "", account)
+  }
+  toupper(account)
 }
 
 #' Base64url encoding (no padding, URL-safe alphabet)
