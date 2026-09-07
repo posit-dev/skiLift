@@ -11,3 +11,6 @@
 ^codecov\.yml$
 ^\.lintr$
 ^\.claude$
+^connections\.toml$
+^\.env$
+^\.env\..*$

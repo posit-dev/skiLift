@@ -8,7 +8,19 @@
 src/*.o
 src/*.so
 src/*.dll
+*.log
 .DS_Store
 renv/library/
 renv/staging/
 .Rprofile.user
+
+# Secrets and credentials -- skiLift reads these from ~/.snowflake by
+# default, but guard against a repo-local copy ever being created.
+*.pem
+*.key
+*.p8
+*.der
+.env
+.env.*
+connections.toml
+credentials.json
