@@ -19,7 +19,13 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Snowflake Inc. \email{snowflake-r@snowflake.com} [copyright holder]
+\strong{Maintainer}: Simon Field \email{simon@hexfield.ai}
+
+Other contributors:
+\itemize{
+  \item Snowflake Inc. [copyright holder]
+  \item Posit Software, PBC [copyright holder, funder]
+}
 
 }
 \keyword{internal}

@@ -1,0 +1,10 @@
+skiLift
+Copyright 2026 Snowflake Inc.
+
+This product is a maintained fork of Snowflake-Labs/RSnowflake
+(https://github.com/Snowflake-Labs/RSnowflake), renamed to skiLift and modified
+since the fork. The fork is maintained by Posit Software, PBC; Hex Field Ltd
+is the maintainer of record.
+
+This product is licensed under the Apache License, Version 2.0. See LICENSE
+for the full license text.

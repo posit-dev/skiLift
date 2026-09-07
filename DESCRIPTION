@@ -2,8 +2,9 @@ Package: skiLift
 Title: DBI Interface to 'Snowflake'
 Version: 0.2.1
 Authors@R: c(
-    person("Snowflake Inc.", role = c("aut", "cre", "cph"),
-           email = "snowflake-r@snowflake.com"))
+    person("Simon", "Field", email = "simon@hexfield.ai", role = c("aut", "cre")),
+    person("Snowflake Inc.", role = "cph"),
+    person("Posit Software, PBC", role = c("cph", "fnd")))
 Description: A DBI-compliant interface to Snowflake (<https://www.snowflake.com>).
     Connects via Snowflake's SQL API v2 (HTTPS/JSON) as the universal baseline,
     with no dependency on ODBC, JDBC, or Python. Supports key-pair JWT,
