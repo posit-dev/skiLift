@@ -14,3 +14,4 @@
 ^connections\.toml$
 ^\.env$
 ^\.env\..*$
+^tests/notebooks$
