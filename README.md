@@ -153,7 +153,7 @@ required).
 ## Using with skiPatrol
 
 If you use the companion `skiPatrol` package for ML workflows, you can
-obtain an skiLift connection from an existing `sfr_connection`:
+obtain a skiLift connection from an existing `sfr_connection`:
 
 ```r
 library(skiPatrol)
