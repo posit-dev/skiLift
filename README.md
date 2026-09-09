@@ -1,18 +1,17 @@
-# skiLift <img src="man/figures/logo.png" align="right" height="139" />
+# skiLift <img src="man/figures/logo.png" align="right" height="139" alt="skiLift logo" />
 
-> **Community Project -- Not Officially Supported**
-> This is a community-developed project from
-> [Snowflake Labs](https://github.com/Snowflake-Labs), not an official
-> Snowflake offering. It is provided **as-is** without warranty or official
-> Snowflake support. Use it for prototyping and experimentation; production
-> use is at your own risk. Feedback, bug reports, and contributions are
-> welcome via [GitHub Issues](https://github.com/posit-dev/skiLift/issues).
+<!-- badges: start -->
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![R-CMD-check](https://github.com/posit-dev/skiLift/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/posit-dev/skiLift/actions/workflows/R-CMD-check.yml)
+<!-- badges: end -->
 
-> **Author:** [Simon Field](https://www.linkedin.com/in/fieldy6961) — SnowCAT
-
-A DBI-compliant R interface to [Snowflake](https://www.snowflake.com) that
-connects directly via the Snowflake SQL API over HTTPS. No dependency on
+skiLift is a DBI-compliant R interface to [Snowflake](https://www.snowflake.com)
+that connects directly via the Snowflake SQL API over HTTPS. No dependency on
 ODBC, JDBC, or Python.
+
+It is maintained by [Posit](https://posit.co) as a fork of
+[Snowflake-Labs/RSnowflake](https://github.com/Snowflake-Labs/RSnowflake),
+renamed and developed since the fork.
 
 > **Companion package:** For Snowflake ML features (Model Registry, Feature
 > Store, Datasets, SPCS model serving), see
@@ -173,6 +172,21 @@ Optional R packages: `openssl` + `jose` (JWT auth), `RcppTOML`
 `adbcdrivermanager` (ADBC backend for bulk Arrow reads/writes),
 `dbplyr` + `dplyr`, `snowflakeauth`.
 
+## Getting help
+
+If you encounter a clear bug, please file an issue with a minimal reproducible
+example on [GitHub](https://github.com/posit-dev/skiLift/issues). For questions
+and other discussion, please use [forum.posit.co](https://forum.posit.co/).
+
+## Code of conduct
+
+Please note that this project is released with a
+[Contributor Code of Conduct](https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html). By participating in this
+project you agree to abide by its terms.
+
 ## License
 
-Apache License 2.0
+Apache License 2.0. Copyright 2026 Snowflake Inc.; see [LICENSE](LICENSE) for
+the full text and [NOTICE](NOTICE) for attribution. skiLift is a maintained fork
+of [Snowflake-Labs/RSnowflake](https://github.com/Snowflake-Labs/RSnowflake),
+modified since the fork.
