@@ -5,6 +5,17 @@
 #'
 #' An S4 class representing the Snowflake DBI driver.
 #'
+#' @section Connecting with no arguments:
+#' `dbConnect(Snowflake())` can be called with **no arguments at all** inside
+#' the Posit Team Native App (Native App) or Posit Workbench. Both write their
+#' own `connections.toml` profile before your code runs; when `account` is
+#' `NULL`, `dbConnect()` reads that profile automatically. The connection
+#' authenticates as the Snowflake user who launched the Native App session --
+#' not a shared service account -- in that user's default role, warehouse,
+#' and database, unless you override any of `account`, `user`, `warehouse`,
+#' `database`, `schema`, or `role` explicitly. An explicit argument always
+#' wins over the profile; the profile always wins over an empty default.
+#'
 #' @param dbObj A [SnowflakeDriver-class] object.
 #' @param object A [SnowflakeDriver-class] object (for `show`).
 #' @export
