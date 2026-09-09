@@ -12,7 +12,7 @@ Description: A DBI-compliant interface to Snowflake (<https://www.snowflake.com>
     Optionally uses ADBC (Arrow Database Connectivity) as an accelerator for
     bulk reads (Arrow-native) and writes (PUT + COPY INTO), activated
     automatically when adbcsnowflake is installed.
-License: Apache License (>= 2) | file LICENSE
+License: Apache License 2.0 | file LICENSE
 URL: https://github.com/posit-dev/skiLift
 BugReports: https://github.com/posit-dev/skiLift/issues
 Encoding: UTF-8
