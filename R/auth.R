@@ -198,12 +198,12 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
 #' Not reachable inside SPCS: there is no browser in a container, and the
 #' Workspace branch of `sf_auth_resolve()` takes priority there.
 #'
-#' Known limitation: because no raw token is exposed, `.try_refresh_token()`
-#' has nothing to re-derive and falls through to `FALSE` for this type, so an
-#' expired browser session surfaces as a hard 401 rather than being renewed in
-#' place. `snowflakeauth`'s own cache covers the common case; carrying the
-#' connection params here so refresh could re-request them is tracked
-#' separately, not done here.
+#' No raw token is exposed, so the 401-retry backstop cannot re-derive one the
+#' way it does for JWT. Instead the connection params are returned alongside
+#' the headers, and `.try_refresh_token()` re-requests credentials through
+#' `snowflakeauth` for the same identity -- which renews from its own cache
+#' when it can, and only falls back to the browser when the cached ID token
+#' has itself expired.
 #'
 #' @param account Account identifier.
 #' @param user Username (optional; resolved from the profile when absent).
@@ -248,6 +248,10 @@ sf_auth_externalbrowser <- function(account, user = NULL, name = NULL) {
   list(
     type = "externalbrowser",
     headers = headers,
+    # Kept so .try_refresh_token() can re-request credentials for the same
+    # identity without rebuilding the params (and so without missing
+    # snowflakeauth's hash(params)-keyed cache).
+    params = params,
     account = account,
     user = user,
     generated_at = Sys.time()

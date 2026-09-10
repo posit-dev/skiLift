@@ -189,6 +189,27 @@ sf_api_cancel <- function(con, handle) {
     return(token_changed)
   }
 
+  # External browser SSO exposes no raw token to re-derive, so re-request
+  # credentials for the same identity instead. snowflakeauth renews from its
+  # own session/ID-token cache where it can, and only reopens the browser when
+  # the cached ID token has itself expired -- so this is cheap in the common
+  # case and still recovers in the uncommon one. Without it a 401 mid-session
+  # was terminal for this auth type.
+  if (identical(auth$type, "externalbrowser")) {
+    if (is.null(auth$params)) {
+      return(FALSE)
+    }
+    return(tryCatch({
+      new_headers <- snowflakeauth::snowflake_credentials(auth$params)
+      old_headers <- con@.state$headers %||% auth$headers
+      changed <- !identical(as.list(new_headers), as.list(old_headers))
+      if (changed) {
+        con@.state$headers <- new_headers
+      }
+      changed
+    }, error = function(e) FALSE))
+  }
+
   FALSE
 }
 
@@ -208,8 +229,10 @@ sf_api_cancel <- function(con, handle) {
   # Some -- external browser SSO, workload identity -- use the
   # `Snowflake Token="..."` scheme instead, and supply a completed header set
   # rather than a token. Prefer that when present.
-  auth_headers <- if (!is.null(auth$headers)) {
-    as.list(auth$headers)
+  # .state$headers is the live copy, same reason as .state$token above.
+  live_headers <- con@.state$headers %||% auth$headers
+  auth_headers <- if (!is.null(live_headers)) {
+    as.list(live_headers)
   } else {
     list(
       "Authorization" = paste("Bearer", token),

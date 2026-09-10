@@ -203,6 +203,8 @@ setMethod("dbConnect", "SnowflakeDriver",
     if (!is.null(auth$token_file)) {
       con@.state$token_mtime <- .file_mtime(auth$token_file)
     }
+    # NULL for every type that yields a raw token; only browser SSO sets it.
+    con@.state$headers <- auth$headers
 
     # Optionally establish a persistent session for transactions & internal protocol
     use_session <- isTRUE(getOption("skiLift.use_session", FALSE))

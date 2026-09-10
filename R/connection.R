@@ -43,6 +43,10 @@ setClass("SnowflakeConnection",
   # reference-semantics home for the token that actually goes on the wire.
   env$token          <- NULL
   env$token_mtime    <- NULL
+  # Same rationale for auth types that hand us a finished header set rather
+  # than a raw token (external browser SSO): the live copy has to live here,
+  # not in the .auth slot, or a refresh never reaches the caller.
+  env$headers        <- NULL
   env
 }
 

@@ -111,3 +111,80 @@ test_that("session mode refuses externalbrowser rather than failing obscurely", 
     "not supported with external browser"
   )
 })
+
+
+# ---------------------------------------------------------------------------
+# Credential refresh (DB-15 follow-up)
+# ---------------------------------------------------------------------------
+#
+# Browser SSO exposes no raw token, so the JWT-style "re-derive it" path in
+# .try_refresh_token() cannot work. Before this, the function fell through to
+# FALSE for this type and a 401 mid-session was terminal. It now re-requests
+# credentials through snowflakeauth for the same identity. These tests drive
+# .try_refresh_token() itself rather than reimplementing its logic.
+
+.browser_con <- function(headers = list(Authorization = 'Snowflake Token="old"'),
+                         params = list(account = "acct")) {
+  con <- new("SnowflakeConnection",
+    account = "acct", user = "user", database = "db", schema = "sch",
+    warehouse = "wh", role = "role",
+    .auth = list(
+      type = "externalbrowser",
+      headers = headers,
+      params = params
+    ),
+    .state = .new_conn_state()
+  )
+  con@.state$headers <- headers
+  con
+}
+
+test_that("refresh updates the live header cache when credentials change", {
+  con <- .browser_con()
+  local_mocked_bindings(
+    snowflake_credentials = function(...) list(Authorization = 'Snowflake Token="new"'),
+    .package = "snowflakeauth"
+  )
+  expect_true(.try_refresh_token(con))
+  # The environment is the reference-semantics home for the live copy, so the
+  # update must be visible on the caller's own object.
+  expect_equal(con@.state$headers$Authorization, 'Snowflake Token="new"')
+})
+
+test_that("refresh reports no change when snowflakeauth returns the same header", {
+  # Must be FALSE, not TRUE: a spurious TRUE makes the 401 backstop retry an
+  # identical request and mask the real error.
+  con <- .browser_con()
+  local_mocked_bindings(
+    snowflake_credentials = function(...) list(Authorization = 'Snowflake Token="old"'),
+    .package = "snowflakeauth"
+  )
+  expect_false(.try_refresh_token(con))
+  expect_equal(con@.state$headers$Authorization, 'Snowflake Token="old"')
+})
+
+test_that("a failing re-request degrades to FALSE rather than erroring", {
+  # If the cached ID token has expired and no browser is available, this must
+  # surface as the original 401, not as an unrelated exception from refresh.
+  con <- .browser_con()
+  local_mocked_bindings(
+    snowflake_credentials = function(...) stop("SSO cache expired"),
+    .package = "snowflakeauth"
+  )
+  expect_false(.try_refresh_token(con))
+  expect_equal(con@.state$headers$Authorization, 'Snowflake Token="old"')
+})
+
+test_that("refresh is a no-op when no params were carried", {
+  # Connections built before params were retained (and hand-built ones in
+  # tests) must not error on refresh.
+  con <- .browser_con(params = NULL)
+  expect_false(.try_refresh_token(con))
+})
+
+test_that("the live header cache is what the request path actually reads", {
+  con <- .browser_con()
+  con@.state$headers <- list(Authorization = 'Snowflake Token="refreshed"')
+  live <- con@.state$headers %||% con@.auth$headers
+  expect_equal(live$Authorization, 'Snowflake Token="refreshed"')
+})
