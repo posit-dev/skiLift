@@ -140,6 +140,7 @@ test_that("session mode refuses externalbrowser rather than failing obscurely", 
 }
 
 test_that("refresh updates the live header cache when credentials change", {
+  skip_if_not_installed("snowflakeauth")
   con <- .browser_con()
   local_mocked_bindings(
     snowflake_credentials = function(...) list(Authorization = 'Snowflake Token="new"'),
@@ -152,6 +153,7 @@ test_that("refresh updates the live header cache when credentials change", {
 })
 
 test_that("refresh reports no change when snowflakeauth returns the same header", {
+  skip_if_not_installed("snowflakeauth")
   # Must be FALSE, not TRUE: a spurious TRUE makes the 401 backstop retry an
   # identical request and mask the real error.
   con <- .browser_con()
@@ -164,6 +166,7 @@ test_that("refresh reports no change when snowflakeauth returns the same header"
 })
 
 test_that("a failing re-request degrades to FALSE rather than erroring", {
+  skip_if_not_installed("snowflakeauth")
   # If the cached ID token has expired and no browser is available, this must
   # surface as the original 401, not as an unrelated exception from refresh.
   con <- .browser_con()
