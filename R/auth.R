@@ -13,11 +13,16 @@
 #'    all official Snowflake drivers accept this token when connecting via
 #'    the internal SPCS gateway.  Returns type = "oauth" so that ADBC maps
 #'    to auth_oauth and REST API v2 uses Bearer + OAUTH token type.
-#' 3. Programmatic Access Token (SNOWFLAKE_PAT env var)
-#' 4. Key-pair JWT (private_key_path + account + user)
-#' 5. Workspace session token fallback (SNOWFLAKE_TOKEN env var or token
+#' 3. External browser SSO (`authenticator = "externalbrowser"`), delegated
+#'    to `snowflakeauth`. After the Workspace branch, because a container has
+#'    no browser and its session token is the only valid credential there;
+#'    before PAT, because an explicit `authenticator` should beat an ambient
+#'    SNOWFLAKE_PAT in the environment.
+#' 4. Programmatic Access Token (SNOWFLAKE_PAT env var)
+#' 5. Key-pair JWT (private_key_path + account + user)
+#' 6. Workspace session token fallback (SNOWFLAKE_TOKEN env var or token
 #'    file without SNOWFLAKE_HOST) -- legacy path.
-#' 6. connections.toml OAuth profile (e.g. Posit Workbench / the Native App,
+#' 7. connections.toml OAuth profile (e.g. Posit Workbench / the Native App,
 #'    which write a short-lived OAuth token into the profile rather than
 #'    exposing SNOWFLAKE_HOST or a session-token file) -- local, so it is
 #'    last, after every ambient-environment check has had a chance to fire.
@@ -34,7 +39,12 @@
 #' @param profile_token_name The profile's name within that file (its
 #'   `toml_name` attribute), so a refresh can re-select the same profile
 #'   after re-parsing rather than guessing at the default again.
-#' @returns A list with `type` ("oauth", "jwt", "pat", "token"), `token`,
+#' @param name Optional `connections.toml` profile name, forwarded to
+#'   external browser SSO so `snowflakeauth` can resolve profile fields the
+#'   caller did not supply explicitly.
+#' @returns A list with `type` ("oauth", "jwt", "pat", "token",
+#'   "externalbrowser"), and either `token` or -- for browser SSO -- a
+#'   completed `headers` list,
 #'   and -- for tokens that rotate -- `token_file` (the path to re-read)
 #'   and `token_source`. `token_source` matters because `token_file`
 #'   means two different things: for a Workspace bare-token file
@@ -53,7 +63,10 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
                             authenticator = NULL,
                             profile_token = NULL,
                             profile_token_file = NULL,
-                            profile_token_name = NULL) {
+                            profile_token_name = NULL,
+                            name = NULL) {
+  auth_lower <- tolower(authenticator %||% "")
+
   # Priority 1: Explicit bearer token
   if (!is.null(token) && nzchar(token)) {
     return(list(
@@ -78,7 +91,17 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
     }
   }
 
-  # Priority 3: Programmatic Access Token (PAT)
+  # Priority 3: External browser SSO
+  #
+  # Placed after the Workspace branch so a container never reaches it: browser
+  # auth cannot work without a browser, and inside SPCS the session token is
+  # the only valid credential. Placed before the PAT check because an explicit
+  # `authenticator` should beat an ambient SNOWFLAKE_PAT in the environment.
+  if (identical(auth_lower, "externalbrowser")) {
+    return(sf_auth_externalbrowser(account = account, user = user, name = name))
+  }
+
+  # Priority 4: Programmatic Access Token (PAT)
   pat <- Sys.getenv("SNOWFLAKE_PAT", "")
   if (nzchar(pat)) {
     return(list(
@@ -88,8 +111,7 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
     ))
   }
 
-  # Priority 4: Key-pair JWT
-  auth_lower <- tolower(authenticator %||% "")
+  # Priority 5: Key-pair JWT
   if (!is.null(private_key_path) || auth_lower == "snowflake_jwt") {
     if (is.null(private_key_path) || !nzchar(private_key_path)) {
       cli_abort(c(
@@ -115,7 +137,7 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
     ))
   }
 
-  # Priority 5: Workspace session token fallback (no SNOWFLAKE_HOST)
+  # Priority 6: Workspace session token fallback (no SNOWFLAKE_HOST)
   ws <- .read_workspace_token()
   if (nzchar(ws$token)) {
     return(list(
@@ -127,7 +149,7 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
     ))
   }
 
-  # Priority 6: connections.toml OAuth profile -- Posit Workbench / the
+  # Priority 7: connections.toml OAuth profile -- Posit Workbench / the
   # Native App write a short-lived OAuth token directly into the profile;
   # there is no SNOWFLAKE_HOST and no session-token file to find it by.
   # host_eligible is deliberately not set: this token is for the public
@@ -146,11 +168,90 @@ sf_auth_resolve <- function(account, user = NULL, token = NULL,
 
   cli_abort(c(
     "No Snowflake credentials found.",
+    "i" = "For interactive SSO on a desktop, set",
+    " " = "{.code authenticator = \"externalbrowser\"}.",
     "i" = "In Workspace Notebooks, ensure SNOWFLAKE_HOST is set and",
     " " = "/snowflake/session/token exists (automatic in SPCS).",
     "i" = "Otherwise provide {.arg token}, set {.envvar SNOWFLAKE_PAT},",
     " " = "or configure key-pair auth in {.file connections.toml}."
   ))
+}
+
+
+# ---------------------------------------------------------------------------
+# External browser SSO
+# ---------------------------------------------------------------------------
+
+#' Resolve credentials via external browser SSO
+#'
+#' Delegates to `snowflakeauth`, which implements the whole flow: a localhost
+#' redirect listener, Snowflake's proof-key exchange, and caching of both the
+#' session token and the keyring-backed ID token so the browser is not
+#' reopened on every connection.
+#'
+#' Returns a completed `headers` list rather than a raw token. The
+#' Authorization scheme is not the same across auth methods -- browser SSO and
+#' workload identity use `Snowflake Token="..."` where key-pair and OAuth use
+#' `Bearer` -- and the header returned by `snowflakeauth` already encodes that
+#' difference. Unwrapping it here would mean reimplementing the distinction.
+#'
+#' Not reachable inside SPCS: there is no browser in a container, and the
+#' Workspace branch of `sf_auth_resolve()` takes priority there.
+#'
+#' Known limitation: because no raw token is exposed, `.try_refresh_token()`
+#' has nothing to re-derive and falls through to `FALSE` for this type, so an
+#' expired browser session surfaces as a hard 401 rather than being renewed in
+#' place. `snowflakeauth`'s own cache covers the common case; carrying the
+#' connection params here so refresh could re-request them is tracked
+#' separately, not done here.
+#'
+#' @param account Account identifier.
+#' @param user Username (optional; resolved from the profile when absent).
+#' @param name Optional `connections.toml` profile name.
+#' @returns A list with `type`, `headers` and identifying fields.
+#' @noRd
+sf_auth_externalbrowser <- function(account, user = NULL, name = NULL) {
+  if (!requireNamespace("snowflakeauth", quietly = TRUE)) {
+    cli_abort(c(
+      "External browser authentication requires the {.pkg snowflakeauth} package.",
+      "i" = 'Install it with {.code install.packages("snowflakeauth")}.'
+    ))
+  }
+  if (!requireNamespace("httpuv", quietly = TRUE)) {
+    cli_abort(c(
+      "External browser authentication requires the {.pkg httpuv} package.",
+      "i" = 'Install it with {.code install.packages("httpuv")}.',
+      " " = "It runs the localhost listener that receives the SSO redirect."
+    ))
+  }
+  if (is.null(account) || !nzchar(account)) {
+    cli_abort("External browser authentication requires {.arg account}.")
+  }
+  if (!rlang::is_interactive()) {
+    cli_abort(c(
+      "External browser authentication requires an interactive R session.",
+      "i" = "For scripts and pipelines use key-pair JWT or a PAT."
+    ))
+  }
+
+  # Build params through snowflakeauth's own constructor rather than by hand:
+  # its session cache keys on hash(params), so a differently shaped list would
+  # miss the cache and reopen the browser on every connection.
+  params <- snowflakeauth::snowflake_connection(
+    name = name,
+    account = account,
+    user = user,
+    authenticator = "externalbrowser"
+  )
+  headers <- snowflakeauth::snowflake_credentials(params)
+
+  list(
+    type = "externalbrowser",
+    headers = headers,
+    account = account,
+    user = user,
+    generated_at = Sys.time()
+  )
 }
 
 

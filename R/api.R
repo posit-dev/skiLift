@@ -204,10 +204,22 @@ sf_api_cancel <- function(con, handle) {
   token <- con@.state$token %||% auth$token
   token_type <- auth$token_type %||% "KEYPAIR_JWT"
 
+  # Most auth methods yield a raw token that we wrap as a Bearer credential.
+  # Some -- external browser SSO, workload identity -- use the
+  # `Snowflake Token="..."` scheme instead, and supply a completed header set
+  # rather than a token. Prefer that when present.
+  auth_headers <- if (!is.null(auth$headers)) {
+    as.list(auth$headers)
+  } else {
+    list(
+      "Authorization" = paste("Bearer", token),
+      "X-Snowflake-Authorization-Token-Type" = token_type
+    )
+  }
+
   req <- httr2::request(url) |>
     httr2::req_headers(
-      "Authorization" = paste("Bearer", token),
-      "X-Snowflake-Authorization-Token-Type" = token_type,
+      !!!auth_headers,
       "Content-Type"  = "application/json",
       "Accept"        = "application/json",
       "User-Agent"    = sf_user_agent()

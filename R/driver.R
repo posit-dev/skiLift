@@ -183,7 +183,8 @@ setMethod("dbConnect", "SnowflakeDriver",
       authenticator = authenticator,
       profile_token = resolved$profile_token,
       profile_token_file = resolved$profile_token_file,
-      profile_token_name = resolved$profile_token_name
+      profile_token_name = resolved$profile_token_name,
+      name = name
     )
 
     con <- new("SnowflakeConnection",

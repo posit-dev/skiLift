@@ -146,7 +146,10 @@
     cli_abort(c(
       "Cannot create external Snowpark session.",
       "i" = "Key-pair (JWT) or PAT authentication required.",
-      "i" = "Set {.arg private_key_path} in dbConnect() or {.envvar SNOWFLAKE_PAT}."
+      "i" = "Set {.arg private_key_path} in dbConnect() or {.envvar SNOWFLAKE_PAT}.",
+      if (identical(auth$type, "externalbrowser"))
+        c("!" = "External browser SSO cannot be forwarded to Snowpark.",
+          " " = "Use key-pair or a PAT for bulk writes.")
     ))
   }
 

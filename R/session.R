@@ -33,6 +33,18 @@ sf_session_login <- function(account, auth) {
   )
 
   # Attach auth credentials depending on type
+  if (identical(auth$type, "externalbrowser")) {
+    # snowflakeauth already performs a login exchange as part of the browser
+    # flow, so what it returns is a session-scoped token. Logging in again
+    # here would be both redundant and unauthenticated -- the raw token is
+    # deliberately not exposed, only the finished Authorization header.
+    cli_abort(c(
+      "Session mode is not supported with external browser authentication.",
+      "i" = "Unset {.code options(skiLift.use_session = TRUE)}, or use",
+      " " = "key-pair or PAT authentication for multi-statement transactions."
+    ))
+  }
+
   if (auth$type == "jwt") {
     login_body$data$TOKEN          <- auth$token
     login_body$data$AUTHENTICATOR  <- "SNOWFLAKE_JWT"
