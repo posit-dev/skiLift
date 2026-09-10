@@ -27,7 +27,7 @@ For the full deploy kit (Docker, service spec, smoke tests), see the
 system.file("rstudio-spcs", package = "skiPatrol")
 ```
 
-Or the Hitchhiker's Guide chapter **RStudio Server on SPCS**.
+Or the Piste Guide chapter **RStudio Server on SPCS**.
 
 ## Execution model
 
