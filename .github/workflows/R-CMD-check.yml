@@ -35,6 +35,15 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
       _R_CHECK_FORCE_SUGGESTS_: false
+      # Keep renv out of CI. renv.lock pins repos to cloud.r-project.org, and
+      # renv/activate.R (via .Rprofile) reasserts that in every R process --
+      # which silently defeats setup-r's use-public-rspm. CRAN serves no Linux
+      # binaries, so every dependency then built from source on ubuntu and
+      # `fs` and `png` failed for want of libuv1-dev/libpng-dev, cascading into
+      # testthat (via pkgload) and reticulate. macOS passed throughout because
+      # CRAN does ship macOS binaries. renv is the right tool for the
+      # development environment; CI should check against current RSPM/CRAN.
+      RENV_CONFIG_AUTOLOADER_ENABLED: false
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +57,11 @@ jobs:
 
       - name: Install R dependencies
         run: |
-          install.packages(c("remotes", "rcmdcheck"))
+          # testthat explicitly, not as a Suggests via install_deps: it is test
+          # infrastructure, and letting it arrive with the optional dependencies
+          # means one unavailable Suggests takes the whole test step down two
+          # steps later as "there is no package called 'testthat'".
+          install.packages(c("remotes", "rcmdcheck", "testthat"))
           remotes::install_deps(".", dependencies = TRUE)
         shell: Rscript {0}
 
