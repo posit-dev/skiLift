@@ -9,6 +9,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # On demand. Without this the only way to get a CI result is to push, which
+  # is awkward when the badge is stale for a reason unrelated to the code --
+  # as it was when Actions itself was disabled on the fork and the README
+  # badge read "no status" with no way to clear it.
+  workflow_dispatch:
 
 permissions:
   contents: read
