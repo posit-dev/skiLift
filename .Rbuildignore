@@ -16,3 +16,4 @@
 ^\.env\..*$
 ^tests/notebooks$
 ^CODE_OF_CONDUCT\.md$
+^WORKSPACE_ADBC\.md$

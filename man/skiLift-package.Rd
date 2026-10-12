@@ -8,7 +8,7 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-A DBI-compliant interface to Snowflake (\url{https://www.snowflake.com}). Connects via Snowflake's SQL API v2 (HTTPS/JSON) as the universal baseline, with no dependency on ODBC, JDBC, or Python. Supports key-pair JWT, programmatic access token (PAT), OAuth, and session token authentication. Optionally uses ADBC (Arrow Database Connectivity) as an accelerator for bulk reads (Arrow-native) and writes (PUT + COPY INTO), activated automatically when adbcsnowflake is installed.
+A DBI-compliant interface to Snowflake (\url{https://www.snowflake.com/en/}). Connects via Snowflake's SQL API v2 (HTTPS/JSON) as the universal baseline, with no dependency on ODBC, JDBC, or Python. Supports key-pair JWT, programmatic access token (PAT), OAuth, and session token authentication. Optionally uses ADBC (Arrow Database Connectivity) as an accelerator for bulk reads (Arrow-native) and writes (PUT + COPY INTO), activated automatically when adbcsnowflake is installed.
 }
 \seealso{
 Useful links:

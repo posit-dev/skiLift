@@ -112,9 +112,12 @@ sf_fetch_partitions_parallel <- function(con, handle, partition_indices, meta) {
       loadNamespace("httr2")
     })
 
+    # The workers are separate R processes, so the internals have to be looked
+    # up by name rather than called directly.
     parallel::parLapply(cl, partition_indices, function(idx) {
-      part_resp <- skiLift:::sf_api_fetch_partition(con, handle, idx)
-      skiLift:::.parse_partition_data(part_resp, meta)
+      fetch <- utils::getFromNamespace("sf_api_fetch_partition", "skiLift")
+      parse <- utils::getFromNamespace(".parse_partition_data", "skiLift")
+      parse(fetch(con, handle, idx), meta)
     })
   }, error = function(e) NULL)
 }

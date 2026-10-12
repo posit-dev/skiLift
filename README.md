@@ -5,7 +5,7 @@
 [![R-CMD-check](https://github.com/posit-dev/skiLift/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/posit-dev/skiLift/actions/workflows/R-CMD-check.yml)
 <!-- badges: end -->
 
-skiLift is a DBI-compliant R interface to [Snowflake](https://www.snowflake.com)
+skiLift is a DBI-compliant R interface to [Snowflake](https://www.snowflake.com/en/)
 that connects directly via the Snowflake SQL API over HTTPS. No dependency on
 ODBC, JDBC, or Python.
 
