@@ -35,6 +35,22 @@
 
 ## Bug Fixes
 
+* **`TIME` and `TIMESTAMP_TZ` columns returned wrong results; both are fixed.
+  If you have read these column types with this package (or with `RSnowflake`,
+  which has the same fault in every earlier release), check any results you
+  kept.**
+  * `TIME` values came back about a billion times too small -- 12:34:56 was
+    returned as 00:00:00.000045. The code treated the number Snowflake sends
+    (seconds since midnight) as nanoseconds.
+  * `TIMESTAMP_TZ` values always came back as `NA`. Snowflake sends the epoch
+    seconds followed by a UTC offset, and the code could not read that pair.
+    The value is now returned as the correct moment in time, shown in UTC; the
+    offset it was stored with is not kept.
+
+  `TIMESTAMP_NTZ`, `TIMESTAMP_LTZ`, `DATE`, text, numeric and boolean columns
+  were not affected. Both fixes are checked against what the Snowflake SQL API
+  actually returns and against the `adbi` driver.
+
 * **Key-pair JWT authentication now works for accounts with a region or cloud
   suffix.** For identifiers of the form `<account>.<region>.<cloud>`,
   `sf_generate_jwt()` converted every dot to a hyphen -- producing

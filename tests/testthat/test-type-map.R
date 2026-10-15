@@ -78,3 +78,47 @@ test_that("integer overflow falls back to double", {
   result <- sf_convert_column(c(big), "fixed", 0L)
   expect_type(result, "double")
 })
+
+
+# TIME and TIMESTAMP_TZ ---------------------------------------------------------
+# The payloads below are what the SQL API actually returned for
+#   SELECT '12:34:56.5'::TIME, '2026-10-14 12:34:56 +0530'::TIMESTAMP_TZ
+# (both scale 9). An earlier version assumed TIME arrived as nanoseconds and
+# that TIMESTAMP_TZ was a bare number, so it returned values a billion times
+# too small and NA respectively, and nothing caught it because no test used a
+# real payload.
+
+test_that("TIME is read as seconds since midnight", {
+  out <- sf_convert_column(c("45296.500000000", "0.000000000", NA, "86399.999999999"), "time", 9L)
+  expect_equal(as.numeric(out), c(45296.5, 0, NA, 86399.999999999))
+  expect_equal(format(out[1]), "12:34:56.5")
+})
+
+test_that("TIMESTAMP_TZ returns the instant, not NA", {
+  out <- sf_convert_column(
+    c("1791961496.000000000 1770", "1792010096.123456789 1080", NA),
+    "timestamp_tz", 9L
+  )
+  expect_s3_class(out, "POSIXct")
+  expect_false(is.na(out[1]))
+  # 12:34:56 +05:30 is 07:04:56 UTC; 12:34:56.123456 -08:00 is 20:34:56.123456 UTC
+  expect_equal(format(out[1], "%Y-%m-%d %H:%M:%S", tz = "UTC"), "2026-10-14 07:04:56")
+  expect_equal(format(out[2], "%Y-%m-%d %H:%M:%OS6", tz = "UTC"), "2026-10-14 20:34:56.123456")
+  expect_true(is.na(out[3]))
+})
+
+test_that("TIMESTAMP_TZ also copes with a bare epoch value", {
+  out <- sf_convert_column("1791961496.000000000", "timestamp_tz", 9L)
+  expect_equal(format(out, "%H:%M:%S", tz = "UTC"), "07:04:56")
+})
+
+test_that("TIME and TIMESTAMP_TZ survive the full parse path", {
+  meta <- list(columns = data.frame(
+    name = c("T", "Z"), type = c("time", "timestamp_tz"),
+    nullable = TRUE, scale = 9L, precision = 0L, stringsAsFactors = FALSE
+  ))
+  raw <- list(list("45296.500000000", "1791961496.000000000 1770"))
+  df <- .json_data_to_df(raw, meta)
+  expect_equal(as.numeric(df$T), 45296.5)
+  expect_false(is.na(df$Z))
+})

@@ -84,9 +84,11 @@ sf_convert_column <- function(x, sf_type, scale = 0L) {
 }
 
 .convert_time <- function(x) {
-  # SQL API v2 returns time as nanoseconds since midnight
-  nanos <- suppressWarnings(as.numeric(x))
-  secs <- nanos / 1e9
+  # SQL API v2 returns TIME as seconds since midnight with a fractional part,
+  # e.g. "45296.500000000" for 12:34:56.5. (This used to divide by 1e9 on the
+  # assumption that the API sent nanoseconds, so every value came back a
+  # billion times too small.)
+  secs <- suppressWarnings(as.numeric(x))
   if (requireNamespace("hms", quietly = TRUE)) {
     hms::as_hms(secs)
   } else {
@@ -114,10 +116,16 @@ sf_convert_column <- function(x, sf_type, scale = 0L) {
 }
 
 .convert_timestamp_tz <- function(x) {
-  # TIMESTAMP_TZ values come as "epoch tz_offset_minutes" pairs
-  # e.g. "1609459200.000000000 1440" (epoch + offset in minutes from UTC base)
-  # Or they may be epoch seconds. Handle both.
-  .convert_timestamp(x, tz = "UTC")
+  # SQL API v2 returns TIMESTAMP_TZ as "<epoch seconds> <offset>", e.g.
+  # "1791961496.000000000 1770", where the offset is minutes east of UTC plus
+  # 1440 (1770 = +05:30). (This used to pass the whole string to as.numeric(),
+  # which gives NA, so every value came back NA.)
+  #
+  # R has no vector type that holds a different UTC offset per element, so the
+  # result is the correct instant shown in UTC. The offset each value was
+  # stored with is not kept.
+  epoch <- sub(" .*$", "", x)
+  .convert_timestamp(epoch, tz = "UTC")
 }
 
 
