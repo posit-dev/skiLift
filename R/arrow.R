@@ -30,7 +30,7 @@ sf_fetch_all_as_arrow_stream <- function(con, resp_body, meta) {
   handle  <- meta$statement_handle
   n_parts <- max(meta$num_partitions, 1L)
 
-  parsed <- sf_parse_response(resp_body, bigint = meta$bigint)
+  parsed <- sf_parse_response(resp_body, inherit = meta)
   first_frame <- parsed$data
 
   if (n_parts <= 1L) {
@@ -68,7 +68,7 @@ sf_fetch_partition_as_arrow_stream <- function(con, resp_body, meta, partition) 
   rlang::check_installed("nanoarrow", reason = "for Arrow result format")
 
   if (partition == 0L) {
-    parsed <- sf_parse_response(resp_body, bigint = meta$bigint)
+    parsed <- sf_parse_response(resp_body, inherit = meta)
     df <- parsed$data
   } else {
     part_resp <- sf_api_fetch_partition(con, meta$statement_handle, partition)

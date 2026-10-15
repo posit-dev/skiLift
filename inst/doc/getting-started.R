@@ -51,6 +51,10 @@ knitr::opts_chunk$set(
 # # Or for every connection (for example in your .Rprofile)
 # options(skiLift.bigint = "integer64")
 
+## ----timezone-----------------------------------------------------------------
+# con <- dbConnect(Snowflake(), name = "my_profile", timezone_out = "UTC")
+# options(skiLift.timezone_out = "UTC")   # or for every connection
+
 ## ----tables-------------------------------------------------------------------
 # # Write a data.frame to Snowflake
 # dbWriteTable(con, "iris_copy", iris)

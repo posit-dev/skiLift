@@ -42,6 +42,18 @@
   Zero-row results now have the same column classes as results with rows;
   before, `DATE`, `TIME` and timestamp columns came back as plain numbers.
 
+* **`TIMESTAMP_LTZ` and `TIMESTAMP_TZ` values are now shown in Snowflake's
+  session time zone, and a new `timezone_out` argument to `dbConnect()` lets
+  you choose another.** Previously `TIMESTAMP_LTZ` was labelled with your R
+  session's time zone and `TIMESTAMP_TZ` with UTC. The default,
+  `"database"`, is the zone Snowflake's own SQL functions use (and its Python
+  and ADBC drivers return), so an hour-of-day worked out in R now agrees with
+  one worked out in a Snowflake query. Use `"local"` for your R session's
+  zone, or any name from `OlsonNames()`, such as `"UTC"`; to change it for
+  every connection, set `options(skiLift.timezone_out = "UTC")`. This only
+  changes how a time is labelled, never which moment it is. `TIMESTAMP_NTZ`
+  has no zone and is labelled `"UTC"`.
+
 * **External browser single sign-on** -- pass
   `authenticator = "externalbrowser"` to `dbConnect()`. The flow is delegated
   to `snowflakeauth`: a localhost redirect listener, Snowflake's proof-key

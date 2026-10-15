@@ -4,11 +4,14 @@
 #' Parse a SQL API v2 response into column metadata and R data.frame
 #'
 #' @param resp_body Parsed JSON body from sf_api_submit / sf_api_fetch_partition.
-#' @param bigint The connection's `bigint` setting (NULL for the default).
+#' @param conn The connection, whose `bigint` and `timezone_out` settings
+#'   apply (NULL for the defaults).
+#' @param inherit Metadata from an earlier response to the same statement,
+#'   whose `bigint` and `tz_out` are reused instead of looking them up again.
 #' @returns A list with `meta` (column info) and `data` (data.frame).
 #' @noRd
-sf_parse_response <- function(resp_body, bigint = NULL) {
-  meta <- sf_parse_metadata(resp_body, bigint = bigint)
+sf_parse_response <- function(resp_body, conn = NULL, inherit = NULL) {
+  meta <- sf_parse_metadata(resp_body, conn = conn, inherit = inherit)
 
   raw_data <- resp_body$data
   if (is.null(raw_data) || length(raw_data) == 0L) {
@@ -27,10 +30,13 @@ sf_parse_response <- function(resp_body, bigint = NULL) {
 #' simplified data.frame format from RcppSimdJson::fparse().
 #'
 #' @param resp_body Parsed JSON body.
-#' @returns A list with `num_rows`, `num_partitions`, `columns` (data.frame
-#'   of name, type, nullable, scale, precision, length).
+#' @param conn,inherit See `sf_parse_response()`.
+#' @returns A list with `bigint`, `tz_out` (the time zone for `TIMESTAMP_LTZ`
+#'   and `TIMESTAMP_TZ` columns; `NULL` unless the result has one), `num_rows`,
+#'   `num_partitions`, `columns` (data.frame of name, type, nullable, scale,
+#'   precision, length).
 #' @noRd
-sf_parse_metadata <- function(resp_body, bigint = NULL) {
+sf_parse_metadata <- function(resp_body, conn = NULL, inherit = NULL) {
   rsmd <- resp_body$resultSetMetaData
   if (is.null(rsmd)) {
     return(list(
@@ -78,8 +84,18 @@ sf_parse_metadata <- function(resp_body, bigint = NULL) {
     n_partitions <- if (is.data.frame(part_info)) nrow(part_info) else length(part_info)
   }
 
+  bigint <- inherit$bigint %||% (if (!is.null(conn)) .conn_bigint(conn)) %||% "numeric"
+  # Looked up only when the result has a column that needs it, because for
+  # the default setting ("database") it costs one query per connection.
+  tz_out <- inherit$tz_out
+  if (is.null(tz_out) && !is.null(conn) &&
+      any(cols$type %in% c("timestamp_ltz", "timestamp_tz"))) {
+    tz_out <- .resolve_tz_out(conn)
+  }
+
   list(
-    bigint           = bigint %||% "numeric",
+    bigint           = bigint,
+    tz_out           = tz_out,
     num_rows         = as.integer(rsmd$numRows %||% 0L),
     num_partitions   = n_partitions,
     statement_handle = resp_body$statementHandle %||% "",
@@ -135,7 +151,7 @@ sf_parse_metadata <- function(resp_body, bigint = NULL) {
   for (j in seq_len(ncols)) {
     columns[[j]] <- sf_convert_column(
       mat[, j], col_info$type[j], col_info$scale[j], col_info$precision[j],
-      meta$bigint %||% "numeric"
+      meta$bigint %||% "numeric", meta$tz_out %||% "UTC"
     )
   }
 
@@ -155,7 +171,7 @@ sf_parse_metadata <- function(resp_body, bigint = NULL) {
   for (j in seq_len(nrow(col_info))) {
     columns[[j]] <- sf_convert_column(
       character(0), col_info$type[j], col_info$scale[j], col_info$precision[j],
-      meta$bigint %||% "numeric"
+      meta$bigint %||% "numeric", meta$tz_out %||% "UTC"
     )
   }
 

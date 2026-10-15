@@ -158,15 +158,27 @@ setMethod("dbDataType", "SnowflakeDriver", function(dbObj, obj, ...) {
 #'   above 2^53. A value that does not fit the chosen type is returned as
 #'   `NA` with a warning. To change the default for every connection, set
 #'   `options(skiLift.bigint = "integer64")`.
+#' @param timezone_out The time zone `TIMESTAMP_LTZ` and `TIMESTAMP_TZ` values
+#'   are shown in. `"database"` (the default) is the Snowflake session's
+#'   `TIMEZONE` setting, the same zone Snowflake's own SQL functions and its
+#'   Python and ADBC drivers use, so an hour-of-day computed in R agrees with
+#'   one computed in a Snowflake query. `"local"` is your R session's time
+#'   zone, and any name from [OlsonNames()] (such as `"UTC"`) is used as given.
+#'   It only changes how a time is labelled, never which moment it is.
+#'   `TIMESTAMP_NTZ` values have no zone and are labelled `"UTC"`. To change
+#'   the default for every connection, set
+#'   `options(skiLift.timezone_out = "UTC")`.
 #' @param ... Additional arguments (ignored).
 #' @export
 setMethod("dbConnect", "SnowflakeDriver",
   function(drv, account = NULL, user = NULL, token = NULL,
            private_key_path = NULL, authenticator = NULL,
            database = "", schema = "", warehouse = "", role = "",
-           name = NULL, bigint = getOption("skiLift.bigint", "numeric"), ...) {
+           name = NULL, bigint = getOption("skiLift.bigint", "numeric"),
+           timezone_out = getOption("skiLift.timezone_out", "database"), ...) {
 
     bigint <- rlang::arg_match0(bigint, .bigint_choices)
+    timezone_out <- .check_timezone_out(timezone_out)
 
     resolved <- .resolve_connect_params(
       account = account, user = user, token = token,
@@ -281,6 +293,7 @@ setMethod("dbConnect", "SnowflakeDriver",
     }
 
     con@.state$bigint <- bigint
+    con@.state$timezone_out <- timezone_out
     .on_connection_opened(con)
     con
   }

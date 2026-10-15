@@ -180,3 +180,60 @@ test_that("TIME and TIMESTAMP_TZ survive the full parse path", {
   expect_equal(as.numeric(df$T), 45296.5)
   expect_false(is.na(df$Z))
 })
+
+
+# timezone_out -------------------------------------------------------------------
+# TIMESTAMP_LTZ and TIMESTAMP_TZ are moments in time; timezone_out only chooses
+# the zone they are labelled with. The default is the Snowflake session's zone,
+# which is what Snowflake's SQL functions and its Python and ADBC drivers use.
+
+.conn_with_state <- function(...) {
+  state <- new.env(parent = emptyenv())
+  vals <- list(...)
+  for (n in names(vals)) assign(n, vals[[n]], envir = state)
+  new("SnowflakeConnection", account = "x", user = "u", database = "", schema = "",
+      warehouse = "", role = "", .auth = list(), .state = state)
+}
+
+test_that("LTZ and TZ columns take the requested zone; the moment is unchanged", {
+  ltz <- sf_convert_column("1792006496.000000000", "timestamp_ltz", 9L, tz_out = "America/Los_Angeles")
+  utc <- sf_convert_column("1792006496.000000000", "timestamp_ltz", 9L, tz_out = "UTC")
+  expect_equal(attr(ltz, "tzone"), "America/Los_Angeles")
+  expect_equal(attr(utc, "tzone"), "UTC")
+  expect_equal(as.numeric(ltz), as.numeric(utc))
+  expect_equal(format(ltz, "%H:%M"), "12:34")        # 19:34 UTC is 12:34 in Los Angeles
+  tz <- sf_convert_column("1791961496.000000000 1770", "timestamp_tz", 9L, tz_out = "Europe/London")
+  expect_equal(attr(tz, "tzone"), "Europe/London")
+  expect_equal(format(tz, "%H:%M:%S", tz = "UTC"), "07:04:56")
+})
+
+test_that("NTZ stays labelled UTC whatever timezone_out is", {
+  ntz <- sf_convert_column("1792006496.000000000", "timestamp_ntz", 9L, tz_out = "Asia/Tokyo")
+  expect_equal(attr(ntz, "tzone"), "UTC")
+})
+
+test_that("zero-row LTZ columns carry the zone too", {
+  meta <- list(columns = data.frame(name = "L", type = "timestamp_ltz", nullable = TRUE,
+                                    scale = 9L, precision = 0L, stringsAsFactors = FALSE),
+               tz_out = "America/Los_Angeles")
+  expect_equal(attr(.empty_df_from_meta(meta)$L, "tzone"), "America/Los_Angeles")
+})
+
+test_that("timezone_out = 'local' is R's zone, a name is used as given", {
+  expect_equal(.resolve_tz_out(.conn_with_state(timezone_out = "Asia/Tokyo")), "Asia/Tokyo")
+  withr::local_timezone("Pacific/Auckland")
+  expect_equal(.resolve_tz_out(.conn_with_state(timezone_out = "local")), "Pacific/Auckland")
+})
+
+test_that("timezone_out = 'database' uses the remembered session zone without a query", {
+  con <- .conn_with_state(timezone_out = "database", session_tz = "America/Los_Angeles")
+  expect_equal(.resolve_tz_out(con), "America/Los_Angeles")
+})
+
+test_that("an unknown timezone_out is rejected before connecting", {
+  expect_error(dbConnect(Snowflake(), account = "x", timezone_out = "Mars/Olympus"), "timezone_out")
+  withr::local_options(skiLift.timezone_out = "Mars/Olympus")
+  expect_error(dbConnect(Snowflake(), account = "x"), "timezone_out")
+  expect_equal(.check_timezone_out("UTC"), "UTC")
+  expect_equal(.check_timezone_out("database"), "database")
+})

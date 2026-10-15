@@ -16,10 +16,12 @@
 #' @param precision Integer precision (`NA` or `0` if unknown).
 #' @param bigint How to return whole numbers too large for an R integer; see
 #'   the `bigint` argument of `dbConnect()`.
+#' @param tz_out Time zone for `TIMESTAMP_LTZ` and `TIMESTAMP_TZ` values; see
+#'   the `timezone_out` argument of `dbConnect()`.
 #' @returns Typed R vector.
 #' @noRd
 sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
-                              bigint = "numeric") {
+                              bigint = "numeric", tz_out = "UTC") {
   switch(sf_type,
     "fixed" = .convert_fixed(x, scale, precision, bigint),
     "real"  = , "float" = as.double(x),
@@ -27,8 +29,8 @@ sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
     "date"    = .convert_date(x),
     "time"    = .convert_time(x),
     "timestamp_ntz" = .convert_timestamp(x, tz = "UTC"),
-    "timestamp_ltz" = .convert_timestamp(x, tz = Sys.timezone()),
-    "timestamp_tz"  = .convert_timestamp_tz(x),
+    "timestamp_ltz" = .convert_timestamp(x, tz = tz_out),
+    "timestamp_tz"  = .convert_timestamp_tz(x, tz = tz_out),
     "text" = x,
     x
   )
@@ -134,17 +136,17 @@ sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
   as.POSIXct(epoch_secs, origin = "1970-01-01", tz = tz)
 }
 
-.convert_timestamp_tz <- function(x) {
+.convert_timestamp_tz <- function(x, tz = "UTC") {
   # SQL API v2 returns TIMESTAMP_TZ as "<epoch seconds> <offset>", e.g.
   # "1791961496.000000000 1770", where the offset is minutes east of UTC plus
   # 1440 (1770 = +05:30). (This used to pass the whole string to as.numeric(),
   # which gives NA, so every value came back NA.)
   #
   # R has no vector type that holds a different UTC offset per element, so the
-  # result is the correct instant shown in UTC. The offset each value was
-  # stored with is not kept.
+  # result is the correct instant shown in `tz` (the `timezone_out` setting).
+  # The offset each value was stored with is not kept.
   epoch <- sub(" .*$", "", x)
-  .convert_timestamp(epoch, tz = "UTC")
+  .convert_timestamp(epoch, tz = tz)
 }
 
 

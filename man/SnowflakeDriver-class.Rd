@@ -35,6 +35,7 @@
   role = "",
   name = NULL,
   bigint = getOption("skiLift.bigint", "numeric"),
+  timezone_out = getOption("skiLift.timezone_out", "database"),
   ...
 )
 
@@ -84,6 +85,17 @@ warning -- \code{lm()}, for example -- so choose it only if you need values
 above 2^53. A value that does not fit the chosen type is returned as
 \code{NA} with a warning. To change the default for every connection, set
 \code{options(skiLift.bigint = "integer64")}.}
+
+\item{timezone_out}{The time zone \code{TIMESTAMP_LTZ} and \code{TIMESTAMP_TZ} values
+are shown in. \code{"database"} (the default) is the Snowflake session's
+\code{TIMEZONE} setting, the same zone Snowflake's own SQL functions and its
+Python and ADBC drivers use, so an hour-of-day computed in R agrees with
+one computed in a Snowflake query. \code{"local"} is your R session's time
+zone, and any name from \code{\link[=OlsonNames]{OlsonNames()}} (such as \code{"UTC"}) is used as given.
+It only changes how a time is labelled, never which moment it is.
+\code{TIMESTAMP_NTZ} values have no zone and are labelled \code{"UTC"}. To change
+the default for every connection, set
+\code{options(skiLift.timezone_out = "UTC")}.}
 }
 \description{
 An S4 class representing the Snowflake DBI driver.

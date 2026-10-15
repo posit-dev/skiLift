@@ -106,7 +106,7 @@ setMethod("dbFetch", signature("SnowflakeResult"),
 
     if (n < 0) {
       if (start_part == 0L) {
-        parsed <- sf_parse_response(resp_body, bigint = meta$bigint)
+        parsed <- sf_parse_response(resp_body, inherit = meta)
         all_parts[[1L]] <- parsed$data
         start_part <- 1L
       }
@@ -138,7 +138,7 @@ setMethod("dbFetch", signature("SnowflakeResult"),
     }
 
     if (!st$fetched) {
-      parsed <- sf_parse_response(resp_body, bigint = meta$bigint)
+      parsed <- sf_parse_response(resp_body, inherit = meta)
       st$fetched <- TRUE
       st$current_partition <- 1L
 
@@ -265,7 +265,7 @@ setMethod("dbBind", "SnowflakeResult",
 
     bindings <- .params_to_bindings(params)
     resp <- sf_api_submit(res@connection, res@statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(res@connection))
+    meta <- sf_parse_metadata(resp, conn = res@connection)
 
     st$pending <- FALSE
     st$fetched <- FALSE

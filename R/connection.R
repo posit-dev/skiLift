@@ -36,6 +36,54 @@ setClass("SnowflakeConnection",
 #' @noRd
 .conn_bigint <- function(conn) conn@.state$bigint %||% "numeric"
 
+#' The Snowflake time zone to show TIMESTAMP_LTZ / TIMESTAMP_TZ values in
+#'
+#' From the connection's `timezone_out` setting: `"database"` (default) is the
+#' session's TIMEZONE parameter, read once and remembered; `"local"` is R's
+#' time zone; anything else is an Olson name used as given. Only changes how
+#' a time is labelled, never which moment it is.
+#' @noRd
+.resolve_tz_out <- function(conn) {
+  setting <- conn@.state$timezone_out %||% "database"
+  if (identical(setting, "local")) {
+    z <- Sys.timezone()
+    return(if (is.na(z) || !nzchar(z)) "UTC" else z)
+  }
+  if (!identical(setting, "database")) return(setting)
+
+  cached <- conn@.state$session_tz
+  if (!is.null(cached)) return(cached)
+
+  tz <- tryCatch({
+    r <- DBI::dbGetQuery(conn, "SHOW PARAMETERS LIKE 'TIMEZONE' IN SESSION")
+    names(r) <- tolower(names(r))
+    as.character(r$value[1])
+  }, error = function(e) NA_character_)
+  if (is.na(tz) || !tz %in% OlsonNames()) {
+    cli_warn(c(
+      "Could not read the Snowflake session time zone; showing timestamps in UTC.",
+      "i" = 'Set {.arg timezone_out} (for example {.code "UTC"}) to choose one and silence this.'
+    ))
+    tz <- "UTC"
+  }
+  conn@.state$session_tz <- tz
+  tz
+}
+
+#' Check a `timezone_out` value
+#' @noRd
+.check_timezone_out <- function(x) {
+  ok <- is.character(x) && length(x) == 1L && !is.na(x) &&
+    (x %in% c("database", "local") || x %in% OlsonNames())
+  if (!ok) {
+    cli_abort(c(
+      "{.arg timezone_out} must be {.val database}, {.val local}, or a time zone name.",
+      "i" = "See {.fn OlsonNames} for the names R accepts, for example {.val UTC}."
+    ))
+  }
+  x
+}
+
 .new_conn_state <- function() {
   env <- new.env(parent = emptyenv())
   env$valid          <- TRUE
@@ -179,7 +227,7 @@ setMethod("dbSendQuery", signature("SnowflakeConnection", "character"),
 
     bindings <- if (!is.null(params)) .params_to_bindings(params) else NULL
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(conn))
+    meta <- sf_parse_metadata(resp, conn = conn)
 
     new("SnowflakeResult",
       connection = conn,
@@ -233,7 +281,7 @@ setMethod("dbSendStatement", signature("SnowflakeConnection", "character"),
 
     bindings <- if (!is.null(params)) .params_to_bindings(params) else NULL
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(conn))
+    meta <- sf_parse_metadata(resp, conn = conn)
     rows <- .extract_rows_affected(resp)
 
     new("SnowflakeResult",
@@ -276,7 +324,7 @@ setMethod("dbGetQuery", signature("SnowflakeConnection", "character"),
     # REST API v2 path
     bindings <- if (!is.null(params)) .params_to_bindings(params) else NULL
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    parsed <- sf_parse_response(resp, bigint = .conn_bigint(conn))
+    parsed <- sf_parse_response(resp, conn = conn)
     meta <- parsed$meta
 
     if (meta$num_partitions > 1L) {
@@ -385,7 +433,7 @@ setMethod("dbGetQueryArrow", signature("SnowflakeConnection", "character"),
 
     # REST API v2 JSON → client-side Arrow conversion
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(conn))
+    meta <- sf_parse_metadata(resp, conn = conn)
     sf_fetch_all_as_arrow_stream(conn, resp, meta)
   }
 )
@@ -398,7 +446,7 @@ setMethod("dbSendQueryArrow", signature("SnowflakeConnection", "character"),
     .check_valid(conn)
     bindings <- if (!is.null(params)) .params_to_bindings(params) else NULL
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(conn))
+    meta <- sf_parse_metadata(resp, conn = conn)
 
     state <- .new_result_state(rows_affected = -1L)
     state$use_arrow <- TRUE

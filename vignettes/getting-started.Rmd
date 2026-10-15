@@ -117,8 +117,8 @@ type every time, including when a query returns no rows.
 | `DATE` | `Date` |
 | `TIME` | `hms` |
 | `TIMESTAMP_NTZ` | `POSIXct`, in UTC |
-| `TIMESTAMP_LTZ` | `POSIXct`, shown in your R session's time zone |
-| `TIMESTAMP_TZ` | `POSIXct`, shown in UTC (the offset it was stored with is not kept) |
+| `TIMESTAMP_LTZ` | `POSIXct`, shown in Snowflake's session time zone by default (`timezone_out`) |
+| `TIMESTAMP_TZ` | `POSIXct`, shown the same way (the offset it was stored with is not kept) |
 | `VARIANT`, `OBJECT`, `ARRAY` | `character` (JSON text) |
 | `BINARY` | `character` (hex text) |
 
@@ -139,6 +139,17 @@ The choices are `"numeric"` (the default), `"integer64"`, `"integer"` and
 not understand it: some, such as `lm()`, give wrong answers without a warning.
 Choose it only if you need values above 2^53. A value too large for the type
 you choose is returned as `NA` with a warning, never silently.
+
+`TIMESTAMP_LTZ` and `TIMESTAMP_TZ` are moments in time; `timezone_out` only
+chooses the time zone they are shown in. The default, `"database"`, is the
+Snowflake session's `TIMEZONE` setting: the zone Snowflake's own SQL functions
+use, so an hour-of-day worked out in R matches one worked out in a query.
+Use `"local"` for your R session's zone, or any name from `OlsonNames()`:
+
+```{r timezone}
+con <- dbConnect(Snowflake(), name = "my_profile", timezone_out = "UTC")
+options(skiLift.timezone_out = "UTC")   # or for every connection
+```
 
 **Earlier versions behaved differently:** they returned `integer`, switching
 to `numeric` whenever a value in the result was too large. See `NEWS.md`.
