@@ -99,6 +99,50 @@ dbExecute(con, "CREATE TABLE test_tbl (id INT, name VARCHAR)")
 dbExecute(con, "INSERT INTO test_tbl VALUES (1, 'Alice')")
 ```
 
+## Result Types
+
+Snowflake does not remember how a whole-number column was declared:
+`INTEGER`, `BIGINT`, `SMALLINT` and `NUMBER(38,0)` are all stored as
+`NUMBER(38,0)`. So skiLift chooses the R type from the column's precision and
+scale, never from the values in a particular result. A column has the same R
+type every time, including when a query returns no rows.
+
+| Snowflake column | R type |
+|---|---|
+| `FLOAT`, `DOUBLE`, `NUMBER(p, s)` with decimals (`s > 0`) | `numeric` |
+| Whole number of 9 digits or fewer, such as `NUMBER(9,0)` | `integer` |
+| Any other whole number: a plain `INTEGER` column, `BIGINT`, `COUNT(*)`, `SUM()` of integers | `numeric` by default; see below |
+| `VARCHAR`, `TEXT` | `character` |
+| `BOOLEAN` | `logical` |
+| `DATE` | `Date` |
+| `TIME` | `hms` |
+| `TIMESTAMP_NTZ` | `POSIXct`, in UTC |
+| `TIMESTAMP_LTZ` | `POSIXct`, shown in your R session's time zone |
+| `TIMESTAMP_TZ` | `POSIXct`, shown in UTC (the offset it was stored with is not kept) |
+| `VARIANT`, `OBJECT`, `ARRAY` | `character` (JSON text) |
+| `BINARY` | `character` (hex text) |
+
+Whole numbers above 9 digits come back as `numeric` (a double). It is exact up
+to 9,007,199,254,740,992 (2^53), which covers any ordinary ID or count. For
+larger values, ask for `integer64`, which holds every 64-bit value exactly:
+
+```{r bigint}
+# For one connection
+con <- dbConnect(Snowflake(), name = "my_profile", bigint = "integer64")
+
+# Or for every connection (for example in your .Rprofile)
+options(skiLift.bigint = "integer64")
+```
+
+The choices are `"numeric"` (the default), `"integer64"`, `"integer"` and
+`"character"`. `integer64` needs the `bit64` package, and many R functions do
+not understand it: some, such as `lm()`, give wrong answers without a warning.
+Choose it only if you need values above 2^53. A value too large for the type
+you choose is returned as `NA` with a warning, never silently.
+
+**Earlier versions behaved differently:** they returned `integer`, switching
+to `numeric` whenever a value in the result was too large. See `NEWS.md`.
+
 ## Writing and Reading Tables
 
 ```{r tables}

@@ -34,6 +34,7 @@
   warehouse = "",
   role = "",
   name = NULL,
+  bigint = getOption("skiLift.bigint", "numeric"),
   ...
 )
 
@@ -69,6 +70,20 @@
 \item{role}{Default role.}
 
 \item{name}{Profile name from connections.toml.}
+
+\item{bigint}{How to return whole-number columns too large for an R
+integer. Snowflake stores \code{INTEGER}, \code{BIGINT} and \code{NUMBER(38,0)} the same
+way, so a column's type is decided by its precision, never by the values
+in a particular result. Columns of up to 9 digits are always \code{integer}.
+Larger ones, including every plain \code{INTEGER} column, follow \code{bigint}:
+\code{"numeric"} (the default; exact up to 2^53, which covers any ordinary ID
+or count), \code{"integer64"}, \code{"integer"} or \code{"character"}. \code{"integer64"}
+(needs the \code{bit64} package) is exact for any 64-bit value, but many R
+functions do not understand it and some give wrong answers without a
+warning -- \code{lm()}, for example -- so choose it only if you need values
+above 2^53. A value that does not fit the chosen type is returned as
+\code{NA} with a warning. To change the default for every connection, set
+\code{options(skiLift.bigint = "integer64")}.}
 }
 \description{
 An S4 class representing the Snowflake DBI driver.

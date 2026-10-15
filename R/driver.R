@@ -145,13 +145,28 @@ setMethod("dbDataType", "SnowflakeDriver", function(dbObj, obj, ...) {
 #' @param warehouse Default warehouse.
 #' @param role Default role.
 #' @param name Profile name from connections.toml.
+#' @param bigint How to return whole-number columns too large for an R
+#'   integer. Snowflake stores `INTEGER`, `BIGINT` and `NUMBER(38,0)` the same
+#'   way, so a column's type is decided by its precision, never by the values
+#'   in a particular result. Columns of up to 9 digits are always `integer`.
+#'   Larger ones, including every plain `INTEGER` column, follow `bigint`:
+#'   `"numeric"` (the default; exact up to 2^53, which covers any ordinary ID
+#'   or count), `"integer64"`, `"integer"` or `"character"`. `"integer64"`
+#'   (needs the `bit64` package) is exact for any 64-bit value, but many R
+#'   functions do not understand it and some give wrong answers without a
+#'   warning -- `lm()`, for example -- so choose it only if you need values
+#'   above 2^53. A value that does not fit the chosen type is returned as
+#'   `NA` with a warning. To change the default for every connection, set
+#'   `options(skiLift.bigint = "integer64")`.
 #' @param ... Additional arguments (ignored).
 #' @export
 setMethod("dbConnect", "SnowflakeDriver",
   function(drv, account = NULL, user = NULL, token = NULL,
            private_key_path = NULL, authenticator = NULL,
            database = "", schema = "", warehouse = "", role = "",
-           name = NULL, ...) {
+           name = NULL, bigint = getOption("skiLift.bigint", "numeric"), ...) {
+
+    bigint <- rlang::arg_match0(bigint, .bigint_choices)
 
     resolved <- .resolve_connect_params(
       account = account, user = user, token = token,
@@ -265,6 +280,7 @@ setMethod("dbConnect", "SnowflakeDriver",
       })
     }
 
+    con@.state$bigint <- bigint
     .on_connection_opened(con)
     con
   }

@@ -4,10 +4,11 @@
 #' Parse a SQL API v2 response into column metadata and R data.frame
 #'
 #' @param resp_body Parsed JSON body from sf_api_submit / sf_api_fetch_partition.
+#' @param bigint The connection's `bigint` setting (NULL for the default).
 #' @returns A list with `meta` (column info) and `data` (data.frame).
 #' @noRd
-sf_parse_response <- function(resp_body) {
-  meta <- sf_parse_metadata(resp_body)
+sf_parse_response <- function(resp_body, bigint = NULL) {
+  meta <- sf_parse_metadata(resp_body, bigint = bigint)
 
   raw_data <- resp_body$data
   if (is.null(raw_data) || length(raw_data) == 0L) {
@@ -29,7 +30,7 @@ sf_parse_response <- function(resp_body) {
 #' @returns A list with `num_rows`, `num_partitions`, `columns` (data.frame
 #'   of name, type, nullable, scale, precision, length).
 #' @noRd
-sf_parse_metadata <- function(resp_body) {
+sf_parse_metadata <- function(resp_body, bigint = NULL) {
   rsmd <- resp_body$resultSetMetaData
   if (is.null(rsmd)) {
     return(list(
@@ -78,6 +79,7 @@ sf_parse_metadata <- function(resp_body) {
   }
 
   list(
+    bigint           = bigint %||% "numeric",
     num_rows         = as.integer(rsmd$numRows %||% 0L),
     num_partitions   = n_partitions,
     statement_handle = resp_body$statementHandle %||% "",
@@ -132,7 +134,8 @@ sf_parse_metadata <- function(resp_body) {
 
   for (j in seq_len(ncols)) {
     columns[[j]] <- sf_convert_column(
-      mat[, j], col_info$type[j], col_info$scale[j]
+      mat[, j], col_info$type[j], col_info$scale[j], col_info$precision[j],
+      meta$bigint %||% "numeric"
     )
   }
 
@@ -150,8 +153,10 @@ sf_parse_metadata <- function(resp_body) {
   names(columns) <- col_info$name
 
   for (j in seq_len(nrow(col_info))) {
-    r_type <- sf_type_to_r(col_info$type[j], col_info$scale[j])
-    columns[[j]] <- vector(r_type, 0L)
+    columns[[j]] <- sf_convert_column(
+      character(0), col_info$type[j], col_info$scale[j], col_info$precision[j],
+      meta$bigint %||% "numeric"
+    )
   }
 
   as.data.frame(columns, stringsAsFactors = FALSE, check.names = FALSE)

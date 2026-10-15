@@ -1,32 +1,90 @@
-test_that("sf_type_to_r maps fixed types correctly", {
-  expect_equal(sf_type_to_r("fixed", 0L), "integer")
-  expect_equal(sf_type_to_r("fixed", 2L), "double")
+# Whole numbers ------------------------------------------------------------------
+# A column's R type is decided by its Snowflake precision and scale, never by
+# the values in the result. Snowflake stores INTEGER, BIGINT, NUMBER(38,0) etc.
+# identically, so precision is all there is to go on.
+
+test_that("up to 9 digits is always integer", {
+  out <- sf_convert_column(c("1", "2", NA, "42"), "fixed", 0L, 9L)
+  expect_type(out, "integer")
+  expect_equal(out, c(1L, 2L, NA, 42L))
 })
 
-test_that("sf_type_to_r maps common types", {
-  expect_equal(sf_type_to_r("text"), "character")
-  expect_equal(sf_type_to_r("real"), "double")
-  expect_equal(sf_type_to_r("float"), "double")
-  expect_equal(sf_type_to_r("boolean"), "logical")
-  expect_equal(sf_type_to_r("date"), "double")
-  expect_equal(sf_type_to_r("timestamp_ntz"), "double")
-  expect_equal(sf_type_to_r("timestamp_ltz"), "double")
-  expect_equal(sf_type_to_r("timestamp_tz"), "double")
-  expect_equal(sf_type_to_r("time"), "double")
-  expect_equal(sf_type_to_r("variant"), "character")
-  expect_equal(sf_type_to_r("array"), "character")
-  expect_equal(sf_type_to_r("object"), "character")
+test_that("larger whole numbers are numeric by default, whatever the values", {
+  # The same NUMBER(38,0) column used to be integer or double depending on
+  # whether any value in the result happened to exceed 2^31.
+  small <- sf_convert_column(c("7", NA), "fixed", 0L, 38L)
+  big   <- sf_convert_column(c("7", "2147483648", "9007199254740992"), "fixed", 0L, 38L)
+  expect_type(small, "double")
+  expect_type(big, "double")
+  expect_equal(big, c(7, 2147483648, 9007199254740992))
+  expect_type(sf_convert_column("1", "fixed", 0L, 10L), "double")
 })
 
-test_that("sf_type_to_r returns character for unknown types", {
-  expect_equal(sf_type_to_r("somethingelse"), "character")
+test_that("unknown precision is treated as large, not as integer", {
+  expect_type(sf_convert_column("1", "fixed", 0L), "double")
+  expect_type(sf_convert_column("1", "fixed", 0L, 0L), "double")
 })
 
-test_that("sf_convert_column handles integer fixed", {
-  x <- c("1", "2", NA, "42")
-  result <- sf_convert_column(x, "fixed", 0L)
-  expect_type(result, "integer")
-  expect_equal(result, c(1L, 2L, NA, 42L))
+test_that("bigint chooses the type for large whole numbers", {
+  x <- c("7", "2147483648")
+  expect_identical(sf_convert_column(x, "fixed", 0L, 38L, "character"), x)
+  expect_type(sf_convert_column("7", "fixed", 0L, 38L, "integer"), "integer")
+  expect_type(sf_convert_column(x, "fixed", 0L, 38L, "numeric"), "double")
+})
+
+test_that('bigint = "integer64" keeps every 64-bit value exactly', {
+  skip_if_not_installed("bit64")
+  big <- sf_convert_column(c("7", "2147483648", "9007199254740993"), "fixed", 0L, 38L, "integer64")
+  expect_s3_class(big, "integer64")
+  expect_equal(as.character(big), c("7", "2147483648", "9007199254740993"))
+})
+
+test_that("a value that does not fit is NA with a warning, never silent", {
+  expect_warning(
+    out <- sf_convert_column(c("7", "2147483648"), "fixed", 0L, 38L, "integer"),
+    "did not fit integer"
+  )
+  expect_equal(out, c(7L, NA))
+  skip_if_not_installed("bit64")
+  expect_warning(
+    out <- sf_convert_column("99999999999999999999999999999999999999", "fixed", 0L, 38L, "integer64"),
+    "did not fit integer64"
+  )
+  expect_true(is.na(out))
+})
+
+test_that("a scale above zero is always double", {
+  out <- sf_convert_column("1.50", "fixed", 2L, 10L)
+  expect_type(out, "double")
+  expect_equal(out, 1.5)
+})
+
+test_that("dbConnect() rejects an unknown bigint before connecting", {
+  expect_error(dbConnect(Snowflake(), account = "x", bigint = "nope"), "bigint")
+})
+
+test_that("the skiLift.bigint option is the default for bigint", {
+  withr::local_options(skiLift.bigint = "nope")
+  expect_error(dbConnect(Snowflake(), account = "x"), "bigint")
+})
+
+test_that("zero-row results have the same column classes as non-empty ones", {
+  types <- data.frame(
+    name = c("int9", "big", "dec", "dbl", "txt", "lgl", "dt", "tm", "ntz", "ltz", "tz", "var"),
+    type = c("fixed", "fixed", "fixed", "real", "text", "boolean", "date", "time",
+             "timestamp_ntz", "timestamp_ltz", "timestamp_tz", "variant"),
+    scale     = c(0L, 0L, 2L, 0L, 0L, 0L, 0L, 9L, 9L, 9L, 9L, 0L),
+    precision = c(9L, 38L, 10L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L),
+    nullable = TRUE, stringsAsFactors = FALSE
+  )
+  meta <- list(columns = types, bigint = "numeric")
+  row <- list(list("7", "7", "1.50", "3.5", "a", "true", "20740", "45296.5",
+                   "1791961496.000000000", "1791961496.000000000",
+                   "1791961496.000000000 1770", "{}"))
+  full  <- .json_data_to_df(row, meta)
+  empty <- .empty_df_from_meta(meta)
+  expect_equal(nrow(empty), 0L)
+  expect_equal(lapply(empty, class), lapply(full, class))
 })
 
 test_that("sf_convert_column handles decimal fixed", {

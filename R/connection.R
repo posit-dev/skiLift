@@ -32,6 +32,10 @@ setClass("SnowflakeConnection",
   )
 )
 
+#' The connection's `bigint` setting (see dbConnect); "numeric" if unset
+#' @noRd
+.conn_bigint <- function(conn) conn@.state$bigint %||% "numeric"
+
 .new_conn_state <- function() {
   env <- new.env(parent = emptyenv())
   env$valid          <- TRUE
@@ -175,7 +179,7 @@ setMethod("dbSendQuery", signature("SnowflakeConnection", "character"),
 
     bindings <- if (!is.null(params)) .params_to_bindings(params) else NULL
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp)
+    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(conn))
 
     new("SnowflakeResult",
       connection = conn,
@@ -229,7 +233,7 @@ setMethod("dbSendStatement", signature("SnowflakeConnection", "character"),
 
     bindings <- if (!is.null(params)) .params_to_bindings(params) else NULL
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp)
+    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(conn))
     rows <- .extract_rows_affected(resp)
 
     new("SnowflakeResult",
@@ -272,7 +276,7 @@ setMethod("dbGetQuery", signature("SnowflakeConnection", "character"),
     # REST API v2 path
     bindings <- if (!is.null(params)) .params_to_bindings(params) else NULL
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    parsed <- sf_parse_response(resp)
+    parsed <- sf_parse_response(resp, bigint = .conn_bigint(conn))
     meta <- parsed$meta
 
     if (meta$num_partitions > 1L) {
@@ -381,7 +385,7 @@ setMethod("dbGetQueryArrow", signature("SnowflakeConnection", "character"),
 
     # REST API v2 JSON → client-side Arrow conversion
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp)
+    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(conn))
     sf_fetch_all_as_arrow_stream(conn, resp, meta)
   }
 )
@@ -394,7 +398,7 @@ setMethod("dbSendQueryArrow", signature("SnowflakeConnection", "character"),
     .check_valid(conn)
     bindings <- if (!is.null(params)) .params_to_bindings(params) else NULL
     resp <- sf_api_submit(conn, statement, bindings = bindings)
-    meta <- sf_parse_metadata(resp)
+    meta <- sf_parse_metadata(resp, bigint = .conn_bigint(conn))
 
     state <- .new_result_state(rows_affected = -1L)
     state$use_arrow <- TRUE

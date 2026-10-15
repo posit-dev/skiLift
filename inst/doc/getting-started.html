@@ -48,8 +48,9 @@ overflow: visible;
 }
 </style>
 <style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
 pre > code.sourceCode { white-space: pre; position: relative; }
-pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
 pre > code.sourceCode > span:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode > span { color: inherit; text-decoration: inherit; }
@@ -60,7 +61,7 @@ div.sourceCode { overflow: auto; }
 }
 @media print {
 pre > code.sourceCode { white-space: pre-wrap; }
-pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
 }
 pre.numberSource code
 { counter-reset: source-line 0; }
@@ -406,19 +407,115 @@ session token is read from the environment:</p>
 <span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">&quot;CREATE TABLE test_tbl (id INT, name VARCHAR)&quot;</span>)</span>
 <span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">&quot;INSERT INTO test_tbl VALUES (1, &#39;Alice&#39;)&quot;</span>)</span></code></pre></div>
 </div>
+<div id="result-types" class="section level2">
+<h2>Result Types</h2>
+<p>Snowflake does not remember how a whole-number column was declared:
+<code>INTEGER</code>, <code>BIGINT</code>, <code>SMALLINT</code> and
+<code>NUMBER(38,0)</code> are all stored as <code>NUMBER(38,0)</code>.
+So skiLift chooses the R type from the column’s precision and scale,
+never from the values in a particular result. A column has the same R
+type every time, including when a query returns no rows.</p>
+<table>
+<colgroup>
+<col width="50%" />
+<col width="50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Snowflake column</th>
+<th>R type</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>FLOAT</code>, <code>DOUBLE</code>, <code>NUMBER(p, s)</code>
+with decimals (<code>s &gt; 0</code>)</td>
+<td><code>numeric</code></td>
+</tr>
+<tr class="even">
+<td>Whole number of 9 digits or fewer, such as
+<code>NUMBER(9,0)</code></td>
+<td><code>integer</code></td>
+</tr>
+<tr class="odd">
+<td>Any other whole number: a plain <code>INTEGER</code> column,
+<code>BIGINT</code>, <code>COUNT(*)</code>, <code>SUM()</code> of
+integers</td>
+<td><code>numeric</code> by default; see below</td>
+</tr>
+<tr class="even">
+<td><code>VARCHAR</code>, <code>TEXT</code></td>
+<td><code>character</code></td>
+</tr>
+<tr class="odd">
+<td><code>BOOLEAN</code></td>
+<td><code>logical</code></td>
+</tr>
+<tr class="even">
+<td><code>DATE</code></td>
+<td><code>Date</code></td>
+</tr>
+<tr class="odd">
+<td><code>TIME</code></td>
+<td><code>hms</code></td>
+</tr>
+<tr class="even">
+<td><code>TIMESTAMP_NTZ</code></td>
+<td><code>POSIXct</code>, in UTC</td>
+</tr>
+<tr class="odd">
+<td><code>TIMESTAMP_LTZ</code></td>
+<td><code>POSIXct</code>, shown in your R session’s time zone</td>
+</tr>
+<tr class="even">
+<td><code>TIMESTAMP_TZ</code></td>
+<td><code>POSIXct</code>, shown in UTC (the offset it was stored with is
+not kept)</td>
+</tr>
+<tr class="odd">
+<td><code>VARIANT</code>, <code>OBJECT</code>, <code>ARRAY</code></td>
+<td><code>character</code> (JSON text)</td>
+</tr>
+<tr class="even">
+<td><code>BINARY</code></td>
+<td><code>character</code> (hex text)</td>
+</tr>
+</tbody>
+</table>
+<p>Whole numbers above 9 digits come back as <code>numeric</code> (a
+double). It is exact up to 9,007,199,254,740,992 (2^53), which covers
+any ordinary ID or count. For larger values, ask for
+<code>integer64</code>, which holds every 64-bit value exactly:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="co"># For one connection</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">dbConnect</span>(<span class="fu">Snowflake</span>(), <span class="at">name =</span> <span class="st">&quot;my_profile&quot;</span>, <span class="at">bigint =</span> <span class="st">&quot;integer64&quot;</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co"># Or for every connection (for example in your .Rprofile)</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.bigint =</span> <span class="st">&quot;integer64&quot;</span>)</span></code></pre></div>
+<p>The choices are <code>&quot;numeric&quot;</code> (the default),
+<code>&quot;integer64&quot;</code>, <code>&quot;integer&quot;</code> and
+<code>&quot;character&quot;</code>. <code>integer64</code> needs the
+<code>bit64</code> package, and many R functions do not understand it:
+some, such as <code>lm()</code>, give wrong answers without a warning.
+Choose it only if you need values above 2^53. A value too large for the
+type you choose is returned as <code>NA</code> with a warning, never
+silently.</p>
+<p><strong>Earlier versions behaved differently:</strong> they returned
+<code>integer</code>, switching to <code>numeric</code> whenever a value
+in the result was too large. See <code>NEWS.md</code>.</p>
+</div>
 <div id="writing-and-reading-tables" class="section level2">
 <h2>Writing and Reading Tables</h2>
-<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="co"># Write a data.frame to Snowflake</span></span>
-<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>, iris)</span>
-<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a></span>
-<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co"># Read it back</span></span>
-<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>iris_back <span class="ot">&lt;-</span> <span class="fu">dbReadTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>)</span>
-<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a></span>
-<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co"># Append more rows</span></span>
-<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="fu">dbAppendTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>, iris[<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>, ])</span>
-<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a></span>
-<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co"># Clean up</span></span>
-<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="fu">dbRemoveTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Write a data.frame to Snowflake</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>, iris)</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co"># Read it back</span></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>iris_back <span class="ot">&lt;-</span> <span class="fu">dbReadTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co"># Append more rows</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="fu">dbAppendTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>, iris[<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>, ])</span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co"># Clean up</span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="fu">dbRemoveTable</span>(con, <span class="st">&quot;iris_copy&quot;</span>)</span></code></pre></div>
 <div id="bulk-write-methods" class="section level3">
 <h3>Bulk Write Methods</h3>
 <p>skiLift automatically picks the fastest write path for your
@@ -468,12 +565,12 @@ Workspace (~2.5s vs ~21s for 50K rows).</p>
 <p><strong>Outside Workspace</strong>, <code>&quot;auto&quot;</code> routes to
 ADBC when available, which outperforms literal INSERT for datasets above
 ~20K rows.</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Force a specific method</span></span>
-<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.upload_method =</span> <span class="st">&quot;snowpark&quot;</span>)</span>
-<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;big_table&quot;</span>, large_df)</span>
-<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co"># Adjust the threshold (cells = rows * cols)</span></span>
-<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.bulk_write_threshold =</span> <span class="dv">100000</span><span class="dt">L</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="co"># Force a specific method</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.upload_method =</span> <span class="st">&quot;snowpark&quot;</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;big_table&quot;</span>, large_df)</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="co"># Adjust the threshold (cells = rows * cols)</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.bulk_write_threshold =</span> <span class="dv">100000</span><span class="dt">L</span>)</span></code></pre></div>
 </div>
 </div>
 <div id="identifier-case-handling" class="section level2">
@@ -483,16 +580,16 @@ operations (<code>dbWriteTable</code>, <code>dbCreateTable</code>,
 <code>dbReadTable</code>, etc.). This matches the behavior of
 Snowflake’s ODBC driver and of Snowflake itself when identifiers are
 unquoted:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;my_table&quot;</span>, <span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span>, <span class="at">name =</span> <span class="st">&quot;Alice&quot;</span>))</span>
-<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="fu">dbListFields</span>(con, <span class="st">&quot;my_table&quot;</span>)</span>
-<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co">#&gt; [1] &quot;ID&quot; &quot;NAME&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;my_table&quot;</span>, <span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span>, <span class="at">name =</span> <span class="st">&quot;Alice&quot;</span>))</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="fu">dbListFields</span>(con, <span class="st">&quot;my_table&quot;</span>)</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="co">#&gt; [1] &quot;ID&quot; &quot;NAME&quot;</span></span></code></pre></div>
 <p>To preserve the original case of identifiers (useful for DBItest
 compliance or when you need lowercase column names), set:</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.identifier_case =</span> <span class="st">&quot;preserve&quot;</span>)</span>
-<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a></span>
-<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;my_table&quot;</span>, <span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span>, <span class="at">name =</span> <span class="st">&quot;Alice&quot;</span>), <span class="at">overwrite =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="fu">dbListFields</span>(con, <span class="st">&quot;my_table&quot;</span>)</span>
-<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;id&quot; &quot;name&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.identifier_case =</span> <span class="st">&quot;preserve&quot;</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="fu">dbWriteTable</span>(con, <span class="st">&quot;my_table&quot;</span>, <span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span>, <span class="at">name =</span> <span class="st">&quot;Alice&quot;</span>), <span class="at">overwrite =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a><span class="fu">dbListFields</span>(con, <span class="st">&quot;my_table&quot;</span>)</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co">#&gt; [1] &quot;id&quot; &quot;name&quot;</span></span></code></pre></div>
 <p><strong>Note:</strong> <code>dbQuoteIdentifier()</code> is not
 affected by this option – it always faithfully quotes the string you
 give it. The option only controls the implicit casing applied in
@@ -501,19 +598,19 @@ table-level operations.</p>
 <div id="adbc-acceleration-optional" class="section level2">
 <h2>ADBC Acceleration (optional)</h2>
 <p>When the <code>adbcsnowflake</code> and
-<code>adbcdrivermanager</code> packages are installed, skiLift can
-use the ADBC (Arrow Database Connectivity) backend for Arrow-native
-reads and PUT + COPY INTO bulk writes. This is particularly beneficial
-for large datasets outside of Workspace Notebooks.</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="co"># Check if ADBC is available</span></span>
-<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>has_adbc <span class="ot">&lt;-</span> <span class="fu">requireNamespace</span>(<span class="st">&quot;adbcsnowflake&quot;</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;ADBC available:&quot;</span>, has_adbc, <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a></span>
-<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co"># ADBC is used automatically in &#39;auto&#39; mode for large writes</span></span>
-<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co"># Force it for reads:</span></span>
-<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.backend =</span> <span class="st">&quot;adbc&quot;</span>)</span>
-<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">dbGetQuery</span>(con, <span class="st">&quot;SELECT * FROM big_table&quot;</span>)</span>
-<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.backend =</span> <span class="st">&quot;auto&quot;</span>)</span></code></pre></div>
+<code>adbcdrivermanager</code> packages are installed, skiLift can use
+the ADBC (Arrow Database Connectivity) backend for Arrow-native reads
+and PUT + COPY INTO bulk writes. This is particularly beneficial for
+large datasets outside of Workspace Notebooks.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="co"># Check if ADBC is available</span></span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>has_adbc <span class="ot">&lt;-</span> <span class="fu">requireNamespace</span>(<span class="st">&quot;adbcsnowflake&quot;</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;ADBC available:&quot;</span>, has_adbc, <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="co"># ADBC is used automatically in &#39;auto&#39; mode for large writes</span></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co"># Force it for reads:</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.backend =</span> <span class="st">&quot;adbc&quot;</span>)</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">dbGetQuery</span>(con, <span class="st">&quot;SELECT * FROM big_table&quot;</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.backend =</span> <span class="st">&quot;auto&quot;</span>)</span></code></pre></div>
 <p>See <code>WORKSPACE_ADBC.md</code> in the package for
 Workspace-specific ADBC constraints (EAI network rules, PAT auth, stage
 host whitelisting).</p>
@@ -523,8 +620,8 @@ host whitelisting).</p>
 <p>skiLift supports the DBI Arrow methods for compatibility with
 packages and workflows that expect them. This requires the
 <code>nanoarrow</code> package.</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>stream <span class="ot">&lt;-</span> <span class="fu">dbGetQueryArrow</span>(con, <span class="st">&quot;SELECT * FROM my_table&quot;</span>)</span>
-<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(stream)</span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>stream <span class="ot">&lt;-</span> <span class="fu">dbGetQueryArrow</span>(con, <span class="st">&quot;SELECT * FROM my_table&quot;</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(stream)</span></code></pre></div>
 <p><strong>Note:</strong> The Snowflake SQL API v2 only returns JSON, so
 these Arrow methods fetch data through the normal JSON path and convert
 to nanoarrow on the client side. This provides interface compatibility
@@ -536,23 +633,23 @@ server-side Arrow transport is planned for a future release.</p>
 <h2>dbplyr Integration</h2>
 <p>skiLift integrates with dbplyr so you can use dplyr verbs that are
 translated to Snowflake SQL and executed lazily:</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
-<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a></span>
-<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a><span class="fu">tbl</span>(con, <span class="st">&quot;my_table&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>  <span class="fu">filter</span>(score <span class="sc">&gt;</span> <span class="dv">90</span>) <span class="sc">|&gt;</span></span>
-<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>  <span class="fu">select</span>(name, score) <span class="sc">|&gt;</span></span>
-<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(score)) <span class="sc">|&gt;</span></span>
-<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a><span class="fu">tbl</span>(con, <span class="st">&quot;my_table&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>  <span class="fu">filter</span>(score <span class="sc">&gt;</span> <span class="dv">90</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>  <span class="fu">select</span>(name, score) <span class="sc">|&gt;</span></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(score)) <span class="sc">|&gt;</span></span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div>
 <div id="snowflake-specific-sql-translations" class="section level3">
 <h3>Snowflake-Specific SQL Translations</h3>
 <p>In addition to the ~150 scalar and ~30 aggregate translations that
 dbplyr provides for Snowflake (e.g. <code>floor_date()</code> to
 <code>DATE_TRUNC</code>, <code>paste0()</code> to
 <code>ARRAY_TO_STRING</code>, <code>ifelse()</code> to
-<code>IFF</code>), skiLift adds translations for 17 Snowflake
-functions that dbplyr does not cover. These let you use
-Snowflake-specific SQL functions directly in dplyr pipelines without
-falling back to <code>sql()</code>.</p>
+<code>IFF</code>), skiLift adds translations for 17 Snowflake functions
+that dbplyr does not cover. These let you use Snowflake-specific SQL
+functions directly in dplyr pipelines without falling back to
+<code>sql()</code>.</p>
 <p><strong>Semi-structured data</strong> – work with VARIANT, OBJECT,
 and ARRAY columns:</p>
 <table>
@@ -709,15 +806,15 @@ and ARRAY columns:</p>
 </tr>
 </tbody>
 </table>
-<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="co"># Example: parse JSON and aggregate into arrays</span></span>
-<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a><span class="fu">tbl</span>(con, <span class="st">&quot;events&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">payload =</span> <span class="fu">parse_json</span>(raw_json)) <span class="sc">|&gt;</span></span>
-<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>  <span class="fu">group_by</span>(event_type) <span class="sc">|&gt;</span></span>
-<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>    <span class="at">user_ids =</span> <span class="fu">array_unique_agg</span>(user_id),</span>
-<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>    <span class="at">n_approx =</span> <span class="fu">approx_count_distinct</span>(user_id)</span>
-<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a><span class="co"># Example: parse JSON and aggregate into arrays</span></span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a><span class="fu">tbl</span>(con, <span class="st">&quot;events&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">payload =</span> <span class="fu">parse_json</span>(raw_json)) <span class="sc">|&gt;</span></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="fu">group_by</span>(event_type) <span class="sc">|&gt;</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>    <span class="at">user_ids =</span> <span class="fu">array_unique_agg</span>(user_id),</span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a>    <span class="at">n_approx =</span> <span class="fu">approx_count_distinct</span>(user_id)</span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div>
 <p>For the full list of dbplyr’s built-in translations, see
 <code>vignette(&quot;translation-function&quot;, package = &quot;dbplyr&quot;)</code>.</p>
 </div>
@@ -729,14 +826,14 @@ per-request and does not currently support session-based transactions.
 Calling <code>dbBegin()</code> will raise an informative error.
 Session-based transaction support is planned for a future release that
 uses the internal Snowflake protocol.</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a><span class="co"># Not yet supported via SQL API v2 -- included for reference:</span></span>
-<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a><span class="fu">dbBegin</span>(con)</span>
-<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">&quot;INSERT INTO accounts VALUES (1, 100.00)&quot;</span>)</span>
-<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="fu">dbCommit</span>(con)</span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="co"># Not yet supported via SQL API v2 -- included for reference:</span></span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a><span class="fu">dbBegin</span>(con)</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">&quot;INSERT INTO accounts VALUES (1, 100.00)&quot;</span>)</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a><span class="fu">dbCommit</span>(con)</span></code></pre></div>
 </div>
 <div id="disconnecting" class="section level2">
 <h2>Disconnecting</h2>
-<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">dbDisconnect</span>(con)</span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="fu">dbDisconnect</span>(con)</span></code></pre></div>
 </div>
 
 

@@ -28,6 +28,7 @@ Imports:
     rlang (>= 1.0.0),
     cli
 Suggests:
+    bit64,
     openssl,
     jose,
     RcppTOML,
@@ -40,7 +41,6 @@ Suggests:
     duckdb,
     blob (>= 1.2.0),
     hms (>= 1.0.0),
-    bit64,
     reticulate,
     snowflakeauth,
     httpuv,

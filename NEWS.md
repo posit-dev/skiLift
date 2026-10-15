@@ -16,6 +16,32 @@
 
 ## New Features
 
+* **Whole-number columns now have one R type per column, decided by the
+  column and not by the values in a result -- and a new `bigint` argument to
+  `dbConnect()` controls it.** This changes what some existing queries return.
+  Snowflake stores `INTEGER`, `INT`, `BIGINT`, `SMALLINT` and `NUMBER(38,0)`
+  identically, so the type a column was created with cannot be recovered; the
+  only information available is its precision. Previously the package tried
+  to fit each result into an R integer and quietly switched to double if any
+  value was too large, so the same column could come back as integer in one
+  query and double in the next, and an empty result differed from a non-empty
+  one. Now:
+  * whole numbers of up to 9 digits are `integer`;
+  * larger ones -- which includes every plain `INTEGER` column and
+    `COUNT(*)` -- are `numeric` (a double, exact up to 9,007,199,254,740,992);
+  * columns with decimals are `numeric`, as before;
+  * `dbConnect(..., bigint = "integer64")` (or `"integer"`, or `"character"`)
+    returns the larger whole numbers as that type instead. `"integer64"`
+    (needs the `bit64` package) keeps every 64-bit value exactly, but many R
+    functions do not understand it and some give wrong answers without a
+    warning (`lm()`, for example), so use it only if you need values above
+    9,007,199,254,740,992. To change the choice for every connection, set
+    `options(skiLift.bigint = "integer64")`. A value too large for the chosen
+    type is returned as `NA` with a warning, never silently.
+
+  Zero-row results now have the same column classes as results with rows;
+  before, `DATE`, `TIME` and timestamp columns came back as plain numbers.
+
 * **External browser single sign-on** -- pass
   `authenticator = "externalbrowser"` to `dbConnect()`. The flow is delegated
   to `snowflakeauth`: a localhost redirect listener, Snowflake's proof-key

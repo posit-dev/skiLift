@@ -27,7 +27,7 @@
 # ---------------------------------------------------------------------------
 
 test_that(".json_data_to_df handles integer fixed columns", {
-  meta <- .make_meta(list(list(name = "ID", type = "fixed", scale = 0L)))
+  meta <- .make_meta(list(list(name = "ID", type = "fixed", scale = 0L, precision = 9L)))
   raw  <- list(list("1"), list("2"), list("42"), list(NULL))
   df   <- .json_data_to_df(raw, meta)
 
@@ -135,7 +135,7 @@ test_that(".json_data_to_df returns empty data.frame for zero columns", {
 })
 
 test_that(".json_data_to_df handles single-row data", {
-  meta <- .make_meta(list(list(name = "X", type = "fixed", scale = 0L)))
+  meta <- .make_meta(list(list(name = "X", type = "fixed", scale = 0L, precision = 9L)))
   raw  <- list(list("99"))
   df   <- .json_data_to_df(raw, meta)
   expect_equal(df$X, 99L)
@@ -148,12 +148,15 @@ test_that(".json_data_to_df handles all-NULL column", {
   expect_equal(df$EMPTY, c(NA_character_, NA_character_, NA_character_))
 })
 
-test_that("integer overflow in .json_data_to_df falls back to double", {
-  big <- as.character(.Machine$integer.max + 1)
-  meta <- .make_meta(list(list(name = "BIG", type = "fixed", scale = 0L)))
-  raw  <- list(list(big))
-  df   <- .json_data_to_df(raw, meta)
-  expect_type(df$BIG, "double")
+test_that("a large whole-number column keeps one type whatever the values", {
+  # NUMBER(38,0) is what a plain INTEGER column looks like to Snowflake. It
+  # used to come back as integer or double depending on the values returned.
+  meta <- .make_meta(list(list(name = "BIG", type = "fixed", scale = 0L, precision = 38L)))
+  small <- .json_data_to_df(list(list("7")), meta)
+  big   <- .json_data_to_df(list(list(as.character(.Machine$integer.max + 1))), meta)
+  expect_type(small$BIG, "double")
+  expect_type(big$BIG, "double")
+  expect_equal(big$BIG, 2147483648)
 })
 
 
@@ -212,7 +215,7 @@ test_that("sf_parse_response handles empty data", {
 test_that(".json_data_to_df produces correct results for 10K rows", {
   n <- 10000L
   meta <- .make_meta(list(
-    list(name = "ID",   type = "fixed", scale = 0L),
+    list(name = "ID",   type = "fixed", scale = 0L, precision = 9L),
     list(name = "VAL",  type = "real"),
     list(name = "FLAG", type = "boolean"),
     list(name = "TXT",  type = "text")

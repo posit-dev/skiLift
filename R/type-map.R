@@ -1,42 +1,27 @@
 # Snowflake <-> R Type Mapping
 # =============================================================================
 
-#' Map a Snowflake type name to the base R vector mode
-#'
-#' Used to pre-allocate empty columns and determine conversion strategy.
-#'
-#' @param sf_type Lowercase Snowflake type string (from resultSetMetaData).
-#' @param scale Integer scale (for fixed-point types).
-#' @returns R mode string: "integer", "double", "character", "logical".
-#' @noRd
-sf_type_to_r <- function(sf_type, scale = 0L) {
-  switch(sf_type,
-    "fixed" = if (scale == 0L) "integer" else "double",
-    "real"  = , "float" = "double",
-    "text"  = "character",
-    "boolean" = "logical",
-    "date"  = "double",
-    "time"  = "double",
-    "timestamp_ntz" = , "timestamp_ltz" = , "timestamp_tz" = "double",
-    "binary"    = "character",
-    "variant"   = , "array" = , "object" = "character",
-    "geography" = , "geometry" = "character",
-    "vector"    = "character",
-    "character"
-  )
-}
-
-
 #' Convert a character vector of JSON values to the appropriate R type
+#'
+#' The R type of a result column is decided by the column's Snowflake type,
+#' precision and scale -- never by the values in the result. Snowflake stores
+#' INTEGER, BIGINT, SMALLINT and NUMBER(38,0) identically, so for whole
+#' numbers the precision is all there is to go on; see `.convert_fixed()`.
+#' Converting a zero-length vector gives the right empty column, which is how
+#' zero-row results get the same classes as non-empty ones.
 #'
 #' @param x Character vector (may contain NA).
 #' @param sf_type Lowercase Snowflake type string.
 #' @param scale Integer scale.
+#' @param precision Integer precision (`NA` or `0` if unknown).
+#' @param bigint How to return whole numbers too large for an R integer; see
+#'   the `bigint` argument of `dbConnect()`.
 #' @returns Typed R vector.
 #' @noRd
-sf_convert_column <- function(x, sf_type, scale = 0L) {
+sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
+                              bigint = "numeric") {
   switch(sf_type,
-    "fixed" = .convert_fixed(x, scale),
+    "fixed" = .convert_fixed(x, scale, precision, bigint),
     "real"  = , "float" = as.double(x),
     "boolean" = .convert_boolean(x),
     "date"    = .convert_date(x),
@@ -54,17 +39,49 @@ sf_convert_column <- function(x, sf_type, scale = 0L) {
 # Type conversion helpers
 # ---------------------------------------------------------------------------
 
-.convert_fixed <- function(x, scale) {
-  if (scale == 0L) {
-    result <- suppressWarnings(as.integer(x))
-    # Overflow produces NA where the original was not NA -- fall back to double
-    overflow <- is.na(result) & !is.na(x)
-    if (any(overflow)) return(as.double(x))
-    result
-  } else {
-    as.double(x)
-  }
+.bigint_choices <- c("numeric", "integer64", "integer", "character")
+
+#' Whole numbers (scale 0) by precision; everything else with a scale is double
+#'
+#' - precision up to 9 digits always fits an R integer, so it is `integer`;
+#' - anything larger follows `bigint`, default `numeric` (a double, exact to
+#'   2^53).
+#'
+#' A plain INTEGER column is NUMBER(38,0), so it takes the `bigint` branch.
+#' `integer64` is not the default because many R functions do not understand
+#' it and some silently give wrong answers (`lm()`, `data.matrix()`,
+#' `reticulate::r_to_py()`), and in Snowflake nearly every whole-number column
+#' would be one.
+#' Values that do not fit the chosen type come back `NA` with a warning,
+#' never silently.
+#' @noRd
+.convert_fixed <- function(x, scale, precision = NA_integer_, bigint = "numeric") {
+  if (is.na(scale) || scale != 0L) return(as.double(x))
+  if (!is.na(precision) && precision > 0L && precision <= 9L) return(as.integer(x))
+  switch(bigint,
+    "integer64" = {
+      rlang::check_installed("bit64", reason = 'to return whole numbers as integer64 (`bigint = "integer64"`).')
+      .whole_number(x, bit64::as.integer64, "integer64")
+    },
+    "integer"   = .whole_number(x, as.integer, "integer"),
+    "numeric"   = as.double(x),
+    "character" = x,
+    cli::cli_abort("Unknown {.arg bigint} value {.val {bigint}}.")
+  )
 }
+
+.whole_number <- function(x, convert, what) {
+  out <- suppressWarnings(convert(x))
+  lost <- is.na(out) & !is.na(x)
+  if (any(lost)) {
+    cli::cli_warn(c(
+      "{sum(lost)} whole-number value{?s} did not fit {what} and {?was/were} returned as {.code NA}.",
+      "i" = 'Use {.code bigint = "numeric"} or {.code bigint = "character"} in {.fn dbConnect} to keep them.'
+    ))
+  }
+  out
+}
+
 
 .convert_boolean <- function(x) {
   # Single lookup: "true"/"1" -> TRUE, "false"/"0" -> FALSE, NA stays NA
@@ -100,7 +117,9 @@ sf_convert_column <- function(x, sf_type, scale = 0L) {
   # SQL API v2 returns timestamps as epoch strings with fractional seconds,
   # OR as nanoseconds-since-epoch. The format depends on TIMESTAMP_OUTPUT_FORMAT.
   nums <- suppressWarnings(as.numeric(x))
-  if (all(is.na(nums))) return(rep(as.POSIXct(NA), length(x)))
+  if (all(is.na(nums))) {
+    return(as.POSIXct(rep(NA_real_, length(x)), origin = "1970-01-01", tz = tz))
+  }
 
   # Heuristic: if values > 1e15, they are nanoseconds; if > 1e12, milliseconds
   max_val <- max(abs(nums), na.rm = TRUE)
