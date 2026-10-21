@@ -73,6 +73,24 @@
 
 ## Bug Fixes
 
+* **`dbWriteTable()` and `dbAppendTable()` corrupted text containing a
+  backslash, lost digits from decimals, and wrote timestamps in your local
+  time; all are fixed. If you have written data with an earlier version
+  (including `RSnowflake`), check it.** Snowflake treats a backslash inside a
+  quoted string as an escape character, which skiLift did not allow for, so
+  `C:\temp\new` was stored as `C:`, a tab, `emp`, a newline, and so on, and a
+  literal `\n` in text became a real newline. `dbQuoteString()` had the same
+  fault, which also affected dbplyr filters on such strings. Separately:
+  * decimals were written with 15 significant digits, so `0.1 + 0.2` and
+    numbers such as `123456789.123456789` did not round-trip exactly (now 17
+    where 15 is not enough);
+  * `TIMESTAMP` values were written as your R session's local clock time, so
+    they shifted by your offset from UTC and lost fractional seconds. They are
+    now written as UTC with microseconds;
+  * `NaN`, `Inf` and `-Inf` produced invalid SQL, and `difftime` / `hms` times
+    and `blob` binary values were written incorrectly. All are now written
+    as proper literals.
+
 * **`TIME` and `TIMESTAMP_TZ` columns returned wrong results; both are fixed.
   If you have read these column types with this package (or with `RSnowflake`,
   which has the same fault in every earlier release), check any results you

@@ -702,7 +702,7 @@ setMethod("dbQuoteIdentifier", signature("SnowflakeConnection", "character"),
 setMethod("dbQuoteString", signature("SnowflakeConnection", "character"),
   function(conn, x, ...) {
     is_na <- is.na(x)
-    x <- gsub("'", "''", x)
+    x <- .escape_sql_string(x)
     x <- paste0("'", x, "'")
     x[is_na] <- "NULL"
     SQL(x)
@@ -999,13 +999,58 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
   if (use_progress) cli::cli_progress_done(id = pb)
 }
 
+#' Format one R value as a SQL literal for a batched INSERT
+#'
+#' The literal has to read back as the same value:
+#' - strings: Snowflake treats a backslash inside a quoted string as an escape,
+#'   so `\` is doubled as well as `'` (otherwise `C:\temp` is written with a tab
+#'   in it);
+#' - doubles: 15 significant digits when that round-trips exactly, otherwise 17;
+#'   NaN and the infinities are written as casts, which SQL has no literal for;
+#' - timestamps: written as UTC wall-clock with fractional seconds, because
+#'   they go into a TIMESTAMP_NTZ column that is read back as UTC;
+#' - times, `integer64` and binary values get literals of their own.
+#' @noRd
 .format_value <- function(x) {
+  if (inherits(x, "blob")) {
+    r <- x[[1L]]
+    if (is.null(r)) return("NULL")
+    return(paste0("X'", paste(sprintf("%02X", as.integer(r)), collapse = ""), "'"))
+  }
+  if (is.double(x) && !inherits(x, c("difftime", "POSIXct", "Date")) && is.nan(x)) {
+    return("'NaN'::FLOAT")
+  }
   if (is.na(x)) return("NULL")
   if (is.logical(x)) return(if (x) "TRUE" else "FALSE")
-  if (is.numeric(x)) return(as.character(x))
+  if (inherits(x, "integer64")) return(as.character(x))
+  if (inherits(x, "difftime")) {
+    secs <- as.numeric(x, units = "secs")
+    return(sprintf("'%02d:%02d:%09.6f'", as.integer(secs %/% 3600),
+                   as.integer((secs %% 3600) %/% 60), secs %% 60))
+  }
+  if (is.numeric(x)) return(.format_number(x))
   if (inherits(x, "Date")) return(paste0("'", format(x, "%Y-%m-%d"), "'"))
-  if (inherits(x, "POSIXct")) return(paste0("'", format(x, "%Y-%m-%d %H:%M:%S"), "'"))
-  paste0("'", gsub("'", "''", as.character(x)), "'")
+  if (inherits(x, "POSIXt")) {
+    return(paste0("'", format(as.POSIXct(x), "%Y-%m-%d %H:%M:%OS6", tz = "UTC"), "'"))
+  }
+  paste0("'", .escape_sql_string(as.character(x)), "'")
+}
+
+#' Escape text for use inside a single-quoted Snowflake string
+#'
+#' Snowflake treats a backslash in a quoted string as an escape character, so
+#' it is doubled (first, before quotes are doubled), as well as `'`.
+#' @noRd
+.escape_sql_string <- function(x) {
+  x <- gsub("\\", "\\\\", x, fixed = TRUE)
+  gsub("'", "''", x, fixed = TRUE)
+}
+
+.format_number <- function(x) {
+  if (is.integer(x)) return(as.character(x))
+  if (is.infinite(x)) return(if (x > 0) "'inf'::FLOAT" else "'-inf'::FLOAT")
+  short <- sprintf("%.15g", x)
+  if (as.numeric(short) == x) short else sprintf("%.17g", x)
 }
 
 #' @rdname SnowflakeConnection-class
