@@ -237,3 +237,26 @@ test_that("an unknown timezone_out is rejected before connecting", {
   expect_equal(.check_timezone_out("UTC"), "UTC")
   expect_equal(.check_timezone_out("database"), "database")
 })
+
+
+# BINARY ---------------------------------------------------------------------------
+# The SQL API sends BINARY as hex text. It used to be returned as that text,
+# not as the bytes.
+
+test_that("BINARY is returned as a blob of the bytes, NULL for NA", {
+  skip_if_not_installed("blob")
+  out <- sf_convert_column(c("DEADBEEF", "00", "", NA, "ff0a"), "binary")
+  expect_s3_class(out, "blob")
+  expect_identical(unclass(out)[[1]], as.raw(c(0xde, 0xad, 0xbe, 0xef)))
+  expect_identical(unclass(out)[[2]], as.raw(0))
+  expect_identical(unclass(out)[[3]], raw(0))
+  expect_null(unclass(out)[[4]])
+  expect_identical(unclass(out)[[5]], as.raw(c(0xff, 0x0a)))
+})
+
+test_that("a zero-row BINARY column is an empty blob", {
+  skip_if_not_installed("blob")
+  meta <- list(columns = data.frame(name = "B", type = "binary", nullable = TRUE,
+                                    scale = 0L, precision = 0L, stringsAsFactors = FALSE))
+  expect_s3_class(.empty_df_from_meta(meta)$B, "blob")
+})

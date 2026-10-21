@@ -596,13 +596,23 @@ setMethod("dbReadTable", signature("SnowflakeConnection", "character"),
 #' @param value A data.frame.
 #' @param overwrite Logical. Drop existing table first?
 #' @param append Logical. Append to existing table?
-#' @param row.names Ignored (always FALSE for Snowflake).
+#' @param row.names Not supported: row names are never written. `TRUE` or a
+#'   column name gives a warning, and `FALSE`, `NA` and `NULL` are accepted.
+#' @param field.types Named character vector of Snowflake column types that
+#'   replace the types skiLift would choose, for example
+#'   `c(id = "BIGINT", note = "VARCHAR(50)")`. Names must be columns of `value`.
 #' @export
 setMethod("dbWriteTable",
   signature("SnowflakeConnection", "character", "data.frame"),
   function(conn, name, value, overwrite = FALSE, append = FALSE,
-           row.names = FALSE, ...) {
+           row.names = FALSE, field.types = NULL, ...) {
     .check_valid(conn)
+    if (isTRUE(row.names) || is.character(row.names)) {
+      cli_warn(c(
+        "!" = "{.arg row.names} is not supported; row names were not written.",
+        "i" = "Add them as an ordinary column first, for example {.code df$row_id <- rownames(df)}."
+      ))
+    }
     name <- .maybe_upcase(name)
     names(value) <- .maybe_upcase(names(value))
     id <- dbQuoteIdentifier(conn, name)
@@ -612,11 +622,12 @@ setMethod("dbWriteTable",
       cli_abort("Table {.val {name}} already exists. Use {.arg overwrite} or {.arg append}.")
     }
 
+    fields <- .field_types_for(value, field.types)
     if (overwrite) {
       dbExecute(conn, paste0("DROP TABLE IF EXISTS ", id))
-      dbCreateTable(conn, name, value)
+      dbCreateTable(conn, name, fields)
     } else if (!exists) {
-      dbCreateTable(conn, name, value)
+      dbCreateTable(conn, name, fields)
     }
 
     if (nrow(value) > 0L) {
@@ -999,20 +1010,46 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
   if (use_progress) cli::cli_progress_done(id = pb)
 }
 
+#' Column types for CREATE TABLE: skiLift's choice, overridden by `field.types`
+#'
+#' Names in `field.types` are matched to the columns of `value` after the same
+#' upper-casing the columns get, and one that matches none is an error, so a
+#' typo cannot silently leave the column with the default type.
+#' @noRd
+.field_types_for <- function(value, field.types = NULL) {
+  types <- stats::setNames(vapply(value, r_to_sf_type, character(1)), names(value))
+  if (is.null(field.types)) return(types)
+  if (!is.character(field.types) || is.null(names(field.types)) || anyNA(names(field.types))) {
+    cli_abort("{.arg field.types} must be a named character vector, for example {.code c(id = \"BIGINT\")}.")
+  }
+  ft_names <- .maybe_upcase(names(field.types))
+  col_names <- .maybe_upcase(names(types))
+  unknown <- setdiff(ft_names, col_names)
+  if (length(unknown) > 0L) {
+    cli_abort(c(
+      "{.arg field.types} names columns that {.arg value} does not have: {.val {unknown}}.",
+      "i" = "The columns are {.val {names(types)}}."
+    ))
+  }
+  types[match(ft_names, col_names)] <- unname(field.types)
+  types
+}
+
 #' Format one R value as a SQL literal for a batched INSERT
 #'
 #' The literal has to read back as the same value:
 #' - strings: Snowflake treats a backslash inside a quoted string as an escape,
 #'   so `\` is doubled as well as `'` (otherwise `C:\temp` is written with a tab
 #'   in it);
-#' - doubles: 15 significant digits when that round-trips exactly, otherwise 17;
+#' - doubles: 17 significant digits (exact), whole numbers below 1e15 as digits;
 #'   NaN and the infinities are written as casts, which SQL has no literal for;
 #' - timestamps: written as UTC wall-clock with fractional seconds, because
 #'   they go into a TIMESTAMP_NTZ column that is read back as UTC;
 #' - times, `integer64` and binary values get literals of their own.
 #' @noRd
 .format_value <- function(x) {
-  if (inherits(x, "blob")) {
+  # binary: a blob, or a one-element piece of a plain list of raw vectors
+  if (inherits(x, "blob") || (is.list(x) && length(x) == 1L && (is.null(x[[1L]]) || is.raw(x[[1L]])))) {
     r <- x[[1L]]
     if (is.null(r)) return("NULL")
     return(paste0("X'", paste(sprintf("%02X", as.integer(r)), collapse = ""), "'"))
@@ -1049,8 +1086,13 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
 .format_number <- function(x) {
   if (is.integer(x)) return(as.character(x))
   if (is.infinite(x)) return(if (x > 0) "'inf'::FLOAT" else "'-inf'::FLOAT")
-  short <- sprintf("%.15g", x)
-  if (as.numeric(short) == x) short else sprintf("%.17g", x)
+  # Whole numbers below 1e15 are written as digits. Anything else gets 17
+  # significant digits, which always identifies the double exactly. (Choosing
+  # a shorter form by checking it with as.numeric() is not safe: R's parser
+  # is inexact for very large and very small values, so it can approve text
+  # that Snowflake reads as a different number.)
+  if (x == round(x) && abs(x) < 1e15) return(sprintf("%.0f", x))
+  sprintf("%.17g", x)
 }
 
 #' @rdname SnowflakeConnection-class

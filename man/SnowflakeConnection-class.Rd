@@ -73,6 +73,7 @@
   overwrite = FALSE,
   append = FALSE,
   row.names = FALSE,
+  field.types = NULL,
   ...
 )
 
@@ -130,7 +131,12 @@
 
 \item{append}{Logical. Append to existing table?}
 
-\item{row.names}{Ignored (always FALSE for Snowflake).}
+\item{row.names}{Not supported: row names are never written. \code{TRUE} or a
+column name gives a warning, and \code{FALSE}, \code{NA} and \code{NULL} are accepted.}
+
+\item{field.types}{Named character vector of Snowflake column types that
+replace the types skiLift would choose, for example
+\code{c(id = "BIGINT", note = "VARCHAR(50)")}. Names must be columns of \code{value}.}
 
 \item{fields}{A data.frame or named character vector of column types.}
 

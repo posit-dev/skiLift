@@ -24,13 +24,14 @@ sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
                               bigint = "numeric", tz_out = "UTC") {
   switch(sf_type,
     "fixed" = .convert_fixed(x, scale, precision, bigint),
-    "real"  = , "float" = as.double(x),
+    "real"  = , "float" = .parse_double(x),
     "boolean" = .convert_boolean(x),
     "date"    = .convert_date(x),
     "time"    = .convert_time(x),
     "timestamp_ntz" = .convert_timestamp(x, tz = "UTC"),
     "timestamp_ltz" = .convert_timestamp(x, tz = tz_out),
     "timestamp_tz"  = .convert_timestamp_tz(x, tz = tz_out),
+    "binary"  = .convert_binary(x),
     "text" = x,
     x
   )
@@ -58,7 +59,7 @@ sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
 #' never silently.
 #' @noRd
 .convert_fixed <- function(x, scale, precision = NA_integer_, bigint = "numeric") {
-  if (is.na(scale) || scale != 0L) return(as.double(x))
+  if (is.na(scale) || scale != 0L) return(.parse_double(x))
   if (!is.na(precision) && precision > 0L && precision <= 9L) return(as.integer(x))
   switch(bigint,
     "integer64" = {
@@ -66,7 +67,7 @@ sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
       .whole_number(x, bit64::as.integer64, "integer64")
     },
     "integer"   = .whole_number(x, as.integer, "integer"),
-    "numeric"   = as.double(x),
+    "numeric"   = .parse_double(x),
     "character" = x,
     cli::cli_abort("Unknown {.arg bigint} value {.val {bigint}}.")
   )
@@ -85,6 +86,25 @@ sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
 }
 
 
+# A BINARY column. The SQL API sends hex text when binary_output_format is HEX,
+# which sf_api_submit() asks for on every statement. The result is a blob (a
+# list of raw vectors, NULL for NA), as DBI expects; a plain list of raw if the
+# blob package is not installed.
+.convert_binary <- function(x) {
+  raws <- lapply(x, function(h) {
+    if (is.na(h)) return(NULL)
+    if (!nzchar(h)) return(raw(0))
+    as.raw(strtoi(substring(h, seq(1L, nchar(h), 2L), seq(2L, nchar(h), 2L)), 16L))
+  })
+  if (requireNamespace("blob", quietly = TRUE)) blob::new_blob(raws) else raws
+}
+
+# A plain list of raw vectors (or NULL for NA): DBI's other way of holding binary.
+.is_raw_list <- function(obj) {
+  is.list(obj) && !is.data.frame(obj) && length(obj) > 0L &&
+    all(vapply(obj, function(x) is.null(x) || is.raw(x), logical(1)))
+}
+
 .convert_boolean <- function(x) {
   # Single lookup: "true"/"1" -> TRUE, "false"/"0" -> FALSE, NA stays NA
   lookup <- c("true" = TRUE, "false" = FALSE, "1" = TRUE, "0" = FALSE)
@@ -92,14 +112,29 @@ sf_convert_column <- function(x, sf_type, scale = 0L, precision = NA_integer_,
 }
 
 .convert_date <- function(x) {
-  # SQL API v2 returns dates as epoch-day integers (days since 1970-01-01)
+  # SQL API v2 returns dates as epoch-day integers (days since 1970-01-01).
+  # Text that is not a number is read as an ISO date. There is no size limit
+  # on the day count: Snowflake dates run to 9999-12-31, 2.9 million days on.
   nums <- suppressWarnings(as.numeric(x))
-  if (all(is.na(nums) | abs(nums) < 1e6)) {
-    as.Date(nums, origin = "1970-01-01")
-  } else {
-    # Fallback: ISO string
-    as.Date(x)
+  if (any(is.na(nums) & !is.na(x))) return(as.Date(x))
+  as.Date(nums, origin = "1970-01-01")
+}
+
+# Text to double, correctly rounded. R's own as.numeric() is not: it turns
+# "1.7976931348623157e+308" into Inf and "1e-300" into a value about 29 units
+# in the last place away. jsonlite's parser uses the C library's strtod, which
+# is exact. Anything that is not a plain JSON number (NaN, inf, ".5") goes
+# through as.numeric(), which handles those.
+.parse_double <- function(x) {
+  out <- rep(NA_real_, length(x))
+  present <- !is.na(x)
+  plain <- present & grepl("^-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?$", x)
+  if (any(plain)) {
+    out[plain] <- as.numeric(jsonlite::fromJSON(paste0("[", paste(x[plain], collapse = ","), "]")))
   }
+  other <- present & !plain
+  if (any(other)) out[other] <- suppressWarnings(as.numeric(x[other]))
+  out
 }
 
 .convert_time <- function(x) {
@@ -162,7 +197,7 @@ r_to_sf_type <- function(obj) {
   if (inherits(obj, "POSIXlt"))       return("TIMESTAMP_NTZ")
   if (inherits(obj, "difftime"))      return("TIME")
   if (inherits(obj, "hms"))           return("TIME")
-  if (inherits(obj, "blob"))          return("BINARY")
+  if (inherits(obj, "blob") || .is_raw_list(obj)) return("BINARY")
   if (inherits(obj, "integer64"))     return("NUMBER(19, 0)")
   if (is.integer(obj))                return("NUMBER(10, 0)")
   if (is.double(obj))                 return("DOUBLE")

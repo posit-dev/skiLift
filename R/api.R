@@ -16,7 +16,9 @@ sf_api_submit <- function(con, sql, bindings = NULL, async = FALSE) {
   body <- list(
     statement = sql,
     timeout   = getOption("skiLift.timeout", 600L),
-    resultSetMetaData = list(format = "jsonv2")
+    resultSetMetaData = list(format = "jsonv2"),
+    # BINARY comes back as hex text; the account or user could set BASE64
+    parameters = list(binary_output_format = "HEX")
   )
 
   if (nzchar(con@database))  body$database  <- con@database

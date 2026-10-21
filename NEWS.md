@@ -73,6 +73,35 @@
 
 ## Bug Fixes
 
+* **Binary data written with `dbWriteTable()` could be stored as text, and
+  `field.types` was silently ignored; both are fixed. If you have written a
+  list of raw vectors with an earlier version (including `RSnowflake`), check
+  the column.** A plain list of raw vectors, which is how DBI holds binary data,
+  was not recognised as binary, so the table got a `TEXT` column containing the
+  words `as.raw(c(0xde, 0xad, ...))` instead of the bytes. (A `blob` column
+  was written correctly.) `field.types`, for example
+  `dbWriteTable(con, "t", df, field.types = c(id = "BIGINT"))`, was ignored, so
+  the column got skiLift's own choice of type; it is now applied, and a name
+  that is not a column of the data is an error. `row.names = TRUE` also
+  dropped the row names without a word; it now gives a warning.
+
+* **Very large, very small and very precise decimals now go in and come back
+  exactly.** Found by comparing every value with what Snowflake itself holds.
+  * Writing: decimals are always sent with 17 significant digits, which
+    identifies any double exactly. Whole numbers below 10^15 are sent as plain
+    integers.
+  * Reading: R's own text-to-number conversion is not exact for the largest
+    and smallest doubles (`1.797693134862316e308` became `Inf`, and `1e-300`
+    was out by about 30 units in the last place). skiLift now reads
+    `FLOAT` and decimal columns with the JSON parser, which is exact.
+  * `DATE` columns now read every date up to 9999-12-31, including dates
+    that Snowflake sends as text rather than as a day count.
+
+* **`BINARY` columns are now returned as a `blob` of the bytes,** where they
+  used to come back as hexadecimal text. skiLift now asks Snowflake for hex
+  explicitly on every statement, so an account whose default is `BASE64` is
+  read correctly too. **This changes what existing queries return.**
+
 * **`dbWriteTable()` and `dbAppendTable()` corrupted text containing a
   backslash, lost digits from decimals, and wrote timestamps in your local
   time; all are fixed. If you have written data with an earlier version

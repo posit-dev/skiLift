@@ -7,7 +7,8 @@ test_that(".format_value handles all types", {
   expect_equal(.format_value(TRUE), "TRUE")
   expect_equal(.format_value(FALSE), "FALSE")
   expect_equal(.format_value(42L), "42")
-  expect_equal(.format_value(3.14), "3.14")
+  # 17 significant digits identify the double exactly, so 3.14 is not "3.14"
+  expect_identical(.parse_double(.format_value(3.14)), 3.14)
   expect_equal(.format_value("hello"), "'hello'")
   expect_equal(.format_value("it's"), "'it''s'")
   expect_equal(.format_value(as.Date("2024-01-15")), "'2024-01-15'")
