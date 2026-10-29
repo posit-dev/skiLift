@@ -76,7 +76,7 @@ test_that("sf_api_submit always uses jsonv2 format", {
 
   called_format <- NULL
   mockr::with_mock(
-    .sf_api_request_with_refresh = function(con, method, url, body = NULL) {
+    .sf_api_request_with_refresh = function(con, method, url, body = NULL, ...) {
       called_format <<- body$resultSetMetaData$format
       list(statementHandle = "h1", resultSetMetaData = list(
         numRows = 0L, rowType = list()

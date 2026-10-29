@@ -17,77 +17,95 @@
 #' @returns Parsed JSON response body.
 #' @noRd
 sf_internal_submit <- function(conn, sql, bindings = NULL) {
+  .sf_internal_request(conn, sql, bindings, arrow = FALSE)
+}
+
+#' One request to the internal query endpoint
+#'
+#' Snowflake rejects a query request that has no `requestId` (HTTP 400, empty
+#' body), so every request carries one. The session is renewed once on a 401;
+#' a second 401 is an error, not another renewal -- an unbounded retry here
+#' used to recurse until R ran out of stack.
+#' @param arrow TRUE to ask for Arrow IPC (`rowsetBase64`) instead of JSON rows.
+#' @noRd
+.sf_internal_request <- function(conn, sql, bindings = NULL, arrow = FALSE) {
   .ensure_session_fresh(conn)
 
-  session <- conn@.state$session
   host <- sf_host(conn@account)
   url <- paste0(host, "/queries/v1/query-request")
 
-  body <- list(
-    sqlText            = sql,
-    sequenceId         = as.integer(Sys.time()),
-    describeOnly       = FALSE,
-    parameters         = list(
-      QUERY_TIMEOUT    = getOption("skiLift.timeout", 600L)
-    )
-  )
+  parameters <- list(QUERY_TIMEOUT = getOption("skiLift.timeout", 600L))
+  if (arrow) parameters$CLIENT_RESULT_CHUNK_SIZE <- 0L
 
+  body <- list(
+    sqlText      = sql,
+    sequenceId   = as.integer(Sys.time()),
+    describeOnly = FALSE,
+    parameters   = parameters
+  )
   if (nzchar(conn@database))  body$database  <- conn@database
   if (nzchar(conn@schema))    body$schema    <- conn@schema
   if (nzchar(conn@warehouse)) body$warehouse <- conn@warehouse
   if (nzchar(conn@role))      body$role      <- conn@role
+  if (!is.null(bindings)) body$bindings <- bindings
 
-  if (!is.null(bindings)) {
-    body$bindings <- bindings
+  # Read the session token when the request is built, so a renewal between
+  # attempts is picked up.
+  perform <- function(u, timeout) {
+    token <- conn@.state$session$token
+    httr2::request(u) |>
+      httr2::req_headers(
+        "Authorization" = .session_auth_header(token),
+        "Content-Type"  = "application/json",
+        "Accept"        = if (arrow) "application/snowflake" else "application/json",
+        "User-Agent"    = sf_user_agent()
+      ) |>
+      httr2::req_body_json(body, auto_unbox = TRUE) |>
+      httr2::req_timeout(timeout) |>
+      httr2::req_error(is_error = function(resp) FALSE) |>
+      httr2::req_perform()
   }
 
-  req <- httr2::request(url) |>
-    httr2::req_headers(
-      "Authorization" = paste("Snowflake Token=", paste0('"', session$token, '"')),
-      "Content-Type"  = "application/json",
-      "Accept"        = "application/json",
-      "User-Agent"    = sf_user_agent()
-    ) |>
-    httr2::req_body_json(body, auto_unbox = TRUE) |>
-    httr2::req_timeout(getOption("skiLift.timeout", 600L)) |>
-    httr2::req_error(is_error = function(resp) FALSE) |>
-    httr2::req_retry(
-      max_tries    = getOption("skiLift.retry_max", 3L),
-      is_transient = function(resp) httr2::resp_status(resp) %in% c(429L, 503L)
-    )
+  request_id <- .new_request_id()
+  deadline <- .sf_deadline()
+  send <- function() {
+    .sf_send(conn, "POST", url, request_id = request_id, deadline = deadline,
+             perform = perform, safe_retry = FALSE)
+  }
 
-  resp <- tryCatch(
-    httr2::req_perform(req),
-    error = function(e) {
-      cli_abort(c(
-        "x" = "Internal query request failed.",
-        "x" = conditionMessage(e)
-      ))
-    }
-  )
+  resp <- send()
+  if (httr2::resp_status(resp) == 401L) {
+    conn@.state$session <- sf_session_renew(conn@account, conn@.state$session)
+    resp <- send()
+  }
 
   status <- httr2::resp_status(resp)
-  resp_body <- .parse_json_body(resp)
+  resp_body <- tryCatch(.parse_json_body(resp), error = function(e) list())
 
   if (status == 200L && isTRUE(resp_body$success)) {
     return(resp_body)
-  }
-
-  # Handle 401 with session renewal
- if (status == 401L) {
-    conn@.state$session <- sf_session_renew(conn@account, session)
-    return(sf_internal_submit(conn, sql, bindings))
   }
 
   err_msg <- resp_body$message %||%
              resp_body$data$errorMessage %||%
              "(unknown error)"
   sf_code <- resp_body$data$errorCode %||% as.character(status)
+  what <- if (arrow) "internal Arrow query" else "internal query"
+  meta <- attr(resp, "skilift")
 
-  cli_abort(c(
-    "x" = "Snowflake internal query error (HTTP {status}, code {sf_code}).",
-    "i" = err_msg
-  ))
+  .sf_abort(
+    c(
+      "x" = "Snowflake {what} error (HTTP {status}, code {sf_code}).",
+      "i" = "{err_msg}",
+      .sf_hints(status, "session", message = err_msg)
+    ),
+    # This endpoint reports a failed statement as HTTP 200 with success = false.
+    class = if (status == 200L) c("skilift_error_sql", "skilift_error_http") else .sf_http_class(status),
+    status = status, code = sf_code,
+    sql_state = resp_body$data$sqlState,
+    request_id = meta$request_id, attempts = meta$attempts,
+    call = NULL
+  )
 }
 
 
@@ -116,75 +134,5 @@ sf_internal_execute <- function(conn, sql) {
 #' @returns Parsed JSON response body with `rowsetBase64` and `chunks`.
 #' @noRd
 sf_internal_submit_arrow <- function(conn, sql, bindings = NULL) {
-  .ensure_session_fresh(conn)
-
-  session <- conn@.state$session
-  host <- sf_host(conn@account)
-  url <- paste0(host, "/queries/v1/query-request")
-
-  body <- list(
-    sqlText            = sql,
-    sequenceId         = as.integer(Sys.time()),
-    describeOnly       = FALSE,
-    parameters         = list(
-      QUERY_TIMEOUT           = getOption("skiLift.timeout", 600L),
-      CLIENT_RESULT_CHUNK_SIZE = 0L
-    )
-  )
-
-  if (nzchar(conn@database))  body$database  <- conn@database
-  if (nzchar(conn@schema))    body$schema    <- conn@schema
-  if (nzchar(conn@warehouse)) body$warehouse <- conn@warehouse
-  if (nzchar(conn@role))      body$role      <- conn@role
-
-  if (!is.null(bindings)) {
-    body$bindings <- bindings
-  }
-
-  req <- httr2::request(url) |>
-    httr2::req_headers(
-      "Authorization" = paste("Snowflake Token=", paste0('"', session$token, '"')),
-      "Content-Type"  = "application/json",
-      "Accept"        = "application/snowflake",
-      "User-Agent"    = sf_user_agent()
-    ) |>
-    httr2::req_body_json(body, auto_unbox = TRUE) |>
-    httr2::req_timeout(getOption("skiLift.timeout", 600L)) |>
-    httr2::req_error(is_error = function(resp) FALSE) |>
-    httr2::req_retry(
-      max_tries    = getOption("skiLift.retry_max", 3L),
-      is_transient = function(resp) httr2::resp_status(resp) %in% c(429L, 503L)
-    )
-
-  resp <- tryCatch(
-    httr2::req_perform(req),
-    error = function(e) {
-      cli_abort(c(
-        "x" = "Internal Arrow query request failed.",
-        "x" = conditionMessage(e)
-      ))
-    }
-  )
-
-  status <- httr2::resp_status(resp)
-  resp_body <- .parse_json_body(resp)
-
-  if (status == 200L && isTRUE(resp_body$success)) {
-    return(resp_body)
-  }
-
-  if (status == 401L) {
-    conn@.state$session <- sf_session_renew(conn@account, session)
-    return(sf_internal_submit_arrow(conn, sql, bindings))
-  }
-
-  err_msg <- resp_body$message %||%
-             resp_body$data$errorMessage %||%
-             "(unknown error)"
-  sf_code <- resp_body$data$errorCode %||% as.character(status)
-
-  cli_abort(c(
-    "x" = "Snowflake internal Arrow query error (HTTP {status}, code {sf_code}).",
-    "i" = err_msg
-  ))
+  .sf_internal_request(conn, sql, bindings, arrow = TRUE)
 }

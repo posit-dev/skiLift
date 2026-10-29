@@ -199,6 +199,17 @@ dbWriteTable(con, "big_table", large_df)
 options(skiLift.bulk_write_threshold = 100000L)
 ```
 
+Whichever method is used, a write is sent in batches. With the REST path (literal
+`INSERT`), each statement holds at most `skiLift.insert_batch_size` rows and
+`skiLift.insert_batch_bytes` bytes of SQL (about 1 MB), whichever is reached first.
+Every batch commits on its own, so **a failed write is not rolled back**: if batch 7
+of 10 fails, batches 1 to 6 are in the table. The error says how many rows were
+committed, and whether the failed batch may have been committed too
+(`?"skilift-errors"`). Over REST, a batch that has to be sent again carries the same
+request id, so Snowflake does not run it twice. skiLift does not support
+transactions; to make changes succeed or fail together, send them as one Snowflake
+Scripting block (see `?dbBegin`).
+
 ## Identifier Case Handling
 
 By default, skiLift uppercases table and column names in DDL/DML
@@ -344,17 +355,28 @@ For the full list of dbplyr's built-in translations, see
 
 ## Transactions
 
-**Note:** The Snowflake SQL API v2 is stateless per-request and does not
-currently support session-based transactions. Calling `dbBegin()` will
-raise an informative error. Session-based transaction support is planned
-for a future release that uses the internal Snowflake protocol.
+skiLift does not support transactions. `dbBegin()`, `dbCommit()`,
+`dbRollback()` and `dbWithTransaction()` raise an error. The Snowflake SQL API
+takes one statement per request and commits each one as it runs, so there is
+nothing for a `BEGIN` to hold open.
+
+To make changes that must all succeed or all fail, send them to Snowflake as one
+Snowflake Scripting block. If any statement in the block fails, nothing is
+committed:
 
 ```{r transactions, eval = FALSE}
-# Not yet supported via SQL API v2 -- included for reference:
-dbBegin(con)
-dbExecute(con, "INSERT INTO accounts VALUES (1, 100.00)")
-dbCommit(con)
+dbExecute(con, "EXECUTE IMMEDIATE $$
+  BEGIN
+    BEGIN TRANSACTION;
+    INSERT INTO accounts VALUES (1, 100.00);
+    UPDATE balances SET total = total + 100.00;
+    COMMIT;
+  END
+$$")
 ```
+
+Writes with `dbWriteTable()` and `dbAppendTable()` are sent in batches that commit
+one at a time, so they are not atomic either (see "Writing Larger Data" above).
 
 ## Disconnecting
 

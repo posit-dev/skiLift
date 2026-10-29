@@ -60,61 +60,46 @@ test_that(".session_needs_renewal returns FALSE for NULL session", {
 
 
 # ---------------------------------------------------------------------------
-# Transaction methods: stateless connection
+# Transaction methods: not supported, on any connection
 # ---------------------------------------------------------------------------
+# A session-based connection used to accept dbBegin() but send only the BEGIN,
+# COMMIT and ROLLBACK through the session; the statements in between still went
+# through the stateless SQL API and committed at once. dbRollback() then left
+# the rows in the table. Found live on 29 Oct 2026. These methods now refuse.
 
-test_that("dbBegin errors on stateless connection", {
+test_that("the transaction methods refuse, with a classed error, without a session", {
   con <- .mock_session_con(has_session = FALSE)
-  expect_error(dbBegin(con), "session-based")
+  for (f in list(dbBegin, dbCommit, dbRollback)) {
+    expect_error(f(con), class = "skilift_error_config")
+  }
+  expect_error(dbWithTransaction(con, TRUE), class = "skilift_error_config")
 })
 
-test_that("dbCommit errors on stateless connection", {
-  con <- .mock_session_con(has_session = FALSE)
-  expect_error(dbCommit(con), "session-based")
-})
-
-test_that("dbRollback errors on stateless connection", {
-  con <- .mock_session_con(has_session = FALSE)
-  expect_error(dbRollback(con), "session-based")
-})
-
-test_that("dbWithTransaction errors on stateless connection", {
-  con <- .mock_session_con(has_session = FALSE)
-  expect_error(dbWithTransaction(con, TRUE), "session-based")
-})
-
-
-# ---------------------------------------------------------------------------
-# Transaction methods: session-based connection
-# State management is tested directly since S4 methods resolve in the
-# package namespace where mockr can't intercept internal calls.
-# ---------------------------------------------------------------------------
-
-test_that("dbBegin errors if transaction already active", {
+test_that("they refuse with a session too: a session does not make them atomic", {
   con <- .mock_session_con(has_session = TRUE)
-  con@.state$in_transaction <- TRUE
-  expect_error(dbBegin(con), "already active")
+  for (f in list(dbBegin, dbCommit, dbRollback)) {
+    expect_error(f(con), "Transactions are not supported")
+  }
+  expect_error(dbWithTransaction(con, TRUE), "Transactions are not supported")
 })
 
-test_that("dbCommit errors if no active transaction", {
+test_that("the message names the alternative: one Snowflake Scripting block", {
   con <- .mock_session_con(has_session = TRUE)
-  expect_error(dbCommit(con), "No active transaction")
+  expect_error(dbBegin(con), "EXECUTE IMMEDIATE")
 })
 
-test_that("dbRollback errors if no active transaction", {
+test_that("a refused dbWithTransaction never runs its code", {
   con <- .mock_session_con(has_session = TRUE)
-  expect_error(dbRollback(con), "No active transaction")
+  ran <- FALSE
+  expect_error(dbWithTransaction(con, { ran <- TRUE }), class = "skilift_error_config")
+  expect_false(ran)
 })
 
-test_that("in_transaction state toggles correctly", {
+test_that("refusing sends nothing to Snowflake", {
   con <- .mock_session_con(has_session = TRUE)
-  expect_false(con@.state$in_transaction)
-
-  con@.state$in_transaction <- TRUE
-  expect_true(con@.state$in_transaction)
-
-  con@.state$in_transaction <- FALSE
-  expect_false(con@.state$in_transaction)
+  httr2::local_mocked_responses(function(req) stop("no request should be made"))
+  expect_error(dbBegin(con), class = "skilift_error_config")
+  expect_error(dbRollback(con), class = "skilift_error_config")
 })
 
 

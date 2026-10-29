@@ -14,6 +14,94 @@
   the package -- compare `RPostgres::Postgres()` -- so no connection code
   needs to change beyond the package name itself.
 
+## Reliability
+
+* **A statement that took more than 45 seconds returned no rows, or reported
+  success before it had finished; it is fixed. If you ran long queries or long
+  `INSERT`, `CREATE TABLE AS` or `CALL` statements with an earlier version
+  (including `RSnowflake`), check the results.** Snowflake answers a statement
+  that runs longer than 45 seconds with a handle, not a result. skiLift took that
+  answer for the result, so a slow `dbGetQuery()` returned a data frame with no
+  rows and no columns, and a slow `dbExecute()` returned at once with the
+  statement still running (and possibly about to fail). skiLift now waits,
+  checking again every 0.5 to 5 seconds, until the statement has finished. If it
+  has not finished after `options(skiLift.timeout)` seconds (600 by default) it
+  is cancelled in Snowflake and an error of class `skilift_error_timeout` names
+  the statement. Pressing Esc while waiting cancels the statement too, so it does
+  not keep running and using credits. Fetching a large result in pieces waits
+  for any piece Snowflake is still preparing.
+
+* **A retried statement can no longer run twice.** Every statement now carries a
+  request id. When a request is sent again after a temporary failure (429, 500,
+  502, 503, 504, a dropped connection or a timeout), the same id goes with
+  `retry=true`, and Snowflake does not run the statement again if it already
+  ran. Before, a 503 that arrived after an `INSERT` had run led to a blind
+  resend, which could write the same rows twice. Failures with no response were
+  not retried at all, and the request timeout applied to every attempt, so three
+  attempts could take more than 30 minutes. Now `options(skiLift.timeout)` is
+  one limit for the whole statement, however many attempts it takes.
+
+* **A request that hangs no longer holds up a statement for ten minutes.** Twice
+  in testing a request got no answer at all ("0 bytes received") and waited out
+  the whole 600 seconds, and once 16 minutes. Snowflake answers a statement
+  within about 45 seconds, so one request is now given
+  `options(skiLift.request_timeout)` seconds (90 by default), then abandoned and
+  sent again. The resend carries the same request id, so the statement still runs
+  only once. Downloading a large result is not limited by it.
+
+* **Errors can be caught by class,** and carry the facts as data: `status`,
+  `code`, `sql_state`, `statement_handle`, `request_id` and `attempts`. The
+  classes are `skilift_error_sql` (422), `skilift_error_auth` (401),
+  `skilift_error_forbidden` (403), `skilift_error_timeout`,
+  `skilift_error_retry` (temporary failures that outlasted the retries),
+  `skilift_error_write` and `skilift_error_config`; see `?"skilift-errors"`.
+  Message text is unchanged, and now ends with a hint where there is one: for a
+  key-pair 401, to compare `RSA_PUBLIC_KEY_FP` with the key and check the clock;
+  for a 403, the network policy; for "does not exist or not authorized", a
+  missing privilege and not a sign-in problem. A server message that contained
+  `{` or `}` used to make the error itself fail; it is now shown as text.
+
+* **Writes are limited by size as well as by rows, and a failed write says how
+  far it got.** A batch now ends at `skiLift.insert_batch_size` rows or
+  `skiLift.insert_batch_bytes` bytes of SQL (about 1 MB), whichever comes first.
+  The row limit alone let one request grow to many megabytes with wide rows or
+  long text. A single row too large to send is an error, before anything is sent
+  for it. Each batch still commits on its own, so **a failed write is not rolled
+  back**; but the `skilift_error_write` error now reports `rows_committed`, the
+  failed batch, and an `outcome` that says whether the failed batch is in the
+  table: `"failed"` (it ran and failed), `"not_executed"`, or `"unknown"` (it may
+  have been committed; check the request id before writing again).
+
+* **Transactions are not supported, and now say so.** `dbBegin()`, `dbCommit()`,
+  `dbRollback()` and `dbWithTransaction()` raise an error of class
+  `skilift_error_config`. **They did not work before, and the failure was
+  silent:** with `options(skiLift.use_session = TRUE)`, `dbBegin()` sent only
+  `BEGIN`, `COMMIT` and `ROLLBACK` through the session, while every statement in
+  between was sent through the SQL API and committed at once. A rolled-back
+  transaction left its rows in the table. To make changes succeed or fail
+  together, send them as one Snowflake Scripting block, for example
+  `dbExecute(con, "EXECUTE IMMEDIATE $$ BEGIN BEGIN TRANSACTION; ...; COMMIT; END $$")`;
+  see `?dbBegin`.
+
+* **Session mode (`options(skiLift.use_session = TRUE)`) could not run a
+  query; it can now.** Its requests had no request id, which Snowflake rejects,
+  and a malformed `Authorization` header. A session that was refused with 401
+  retried without limit until R ran out of stack; it now renews once and then
+  reports the error.
+
+* **`dbAppendTable()` and `dbCreateTable()` with a `DBI::Id()` table name
+  failed; they work now.** Without a method for `Id` they fell through to DBI's
+  generic versions, which use multi-row parameter binding, and that skiLift does
+  not support. `dbAppendTable(con, DBI::Id(schema = "S", table = "T"), df)` is
+  the standard DBI way to name a table in a schema, and what dplyr's
+  `rows_append()` relies on.
+
+* **Account names with underscores** now use the hyphen form in the host name
+  (`acme_test` connects to `acme-test.snowflakecomputing.com`), as Snowflake
+  documents for places that do not accept underscores. This is a precaution: we
+  have not seen an underscore host name fail. The account name is unchanged
+  everywhere else, including in key-pair sign-in.
+
 ## New Features
 
 * **Whole-number columns now have one R type per column, decided by the

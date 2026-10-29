@@ -124,10 +124,14 @@ knitr::opts_chunk$set(
 #   collect()
 
 ## ----transactions, eval = FALSE-----------------------------------------------
-# # Not yet supported via SQL API v2 -- included for reference:
-# dbBegin(con)
-# dbExecute(con, "INSERT INTO accounts VALUES (1, 100.00)")
-# dbCommit(con)
+# dbExecute(con, "EXECUTE IMMEDIATE $$
+#   BEGIN
+#     BEGIN TRANSACTION;
+#     INSERT INTO accounts VALUES (1, 100.00);
+#     UPDATE balances SET total = total + 100.00;
+#     COMMIT;
+#   END
+# $$")
 
 ## ----disconnect---------------------------------------------------------------
 # dbDisconnect(con)

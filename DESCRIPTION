@@ -26,10 +26,10 @@ Imports:
     httr2 (>= 1.0.0),
     jsonlite,
     rlang (>= 1.0.0),
-    cli
+    cli,
+    openssl
 Suggests:
     bit64,
-    openssl,
     jose,
     RcppTOML,
     RcppSimdJson,

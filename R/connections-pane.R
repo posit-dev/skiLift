@@ -24,7 +24,7 @@
     observer$connectionOpened(
       type        = "Snowflake",
       displayName = paste0(conn@account, " [", conn@database, "]"),
-      host        = paste0(conn@account, ".snowflakecomputing.com"),
+      host        = .sf_hostname(conn@account),
       connectCode = .connect_code(conn),
       disconnect  = function() { dbDisconnect(conn) },
       listObjectTypes = function() {
@@ -76,7 +76,7 @@
   tryCatch({
     observer$connectionClosed(
       type = "Snowflake",
-      host = paste0(conn@account, ".snowflakecomputing.com")
+      host = .sf_hostname(conn@account)
     )
   }, error = function(e) {
     invisible()

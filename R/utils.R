@@ -22,5 +22,16 @@ sf_host <- function(account, auth = NULL) {
         isTRUE(auth$host_eligible)) {
     return(paste0("https://", spcs_host))
   }
-  paste0("https://", account, ".snowflakecomputing.com")
+  # Underscores are not valid in host names, and some TLS stacks reject them
+  # when matching Snowflake's certificate. Snowflake accepts the same account
+  # with each underscore written as a hyphen, for exactly this case. Only the
+  # host changes: the account as given is still what the JWT claims and
+  # profiles use.
+  paste0("https://", .sf_hostname(account))
+}
+
+#' The public host name for an account, without the scheme
+#' @noRd
+.sf_hostname <- function(account) {
+  paste0(gsub("_", "-", account, fixed = TRUE), ".snowflakecomputing.com")
 }

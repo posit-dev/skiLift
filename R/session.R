@@ -2,7 +2,7 @@
 # =============================================================================
 # Implements the /session/v1/* endpoints for establishing persistent sessions.
 # A session provides a session token + master token, enabling:
-#   - Multi-statement transactions (BEGIN/COMMIT/ROLLBACK)
+#   - (Transactions are NOT supported: see R/transactions.R)
 #   - Temporary tables that persist across requests
 #   - Session variables
 #   - (Future) Native Arrow transport via /queries/v1/query-request
@@ -41,7 +41,7 @@ sf_session_login <- function(account, auth) {
     cli_abort(c(
       "Session mode is not supported with external browser authentication.",
       "i" = "Unset {.code options(skiLift.use_session = TRUE)}, or use",
-      " " = "key-pair or PAT authentication for multi-statement transactions."
+      " " = "key-pair or PAT authentication with a session."
     ))
   }
 
@@ -147,7 +147,7 @@ sf_session_heartbeat <- function(account, session) {
 
   req <- httr2::request(url) |>
     httr2::req_headers(
-      "Authorization" = paste("Snowflake Token=", paste0('"', session$token, '"')),
+      "Authorization" = .session_auth_header(session$token),
       "Content-Type"  = "application/json"
     ) |>
     httr2::req_method("POST") |>
@@ -171,7 +171,7 @@ sf_session_delete <- function(account, session) {
 
   req <- httr2::request(url) |>
     httr2::req_headers(
-      "Authorization" = paste("Snowflake Token=", paste0('"', session$token, '"')),
+      "Authorization" = .session_auth_header(session$token),
       "Content-Type"  = "application/json"
     ) |>
     httr2::req_body_json(list(delete = TRUE), auto_unbox = TRUE) |>
@@ -213,3 +213,11 @@ sf_session_delete <- function(account, session) {
   }
   invisible()
 }
+
+
+#' The Authorization header for a session token: `Snowflake Token="<token>"`
+#'
+#' With no space after the `=`. Built with `paste()` it had one, and Snowflake
+#' answered "Session token not found in the request data" (401).
+#' @noRd
+.session_auth_header <- function(token) paste0('Snowflake Token="', token, '"')

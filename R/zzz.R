@@ -17,8 +17,10 @@
   op_rsf <- list(
     skiLift.timeout              = 600L,
     skiLift.retry_max            = 3L,
+    skiLift.request_timeout      = 90L,
     skiLift.result_format        = "json",
     skiLift.insert_batch_size    = 16384L,
+    skiLift.insert_batch_bytes   = 1e6,
     skiLift.upload_method        = "auto",
     skiLift.identifier_case      = "upper",
     skiLift.use_simdjson         = TRUE,

@@ -20,6 +20,8 @@
 \alias{dbReadTable,SnowflakeConnection,character-method}
 \alias{dbWriteTable,SnowflakeConnection,character,data.frame-method}
 \alias{dbCreateTable,SnowflakeConnection,character-method}
+\alias{dbAppendTable,SnowflakeConnection,Id-method}
+\alias{dbCreateTable,SnowflakeConnection,Id-method}
 \alias{dbAppendTable,SnowflakeConnection,character-method}
 \alias{dbRemoveTable,SnowflakeConnection,character-method}
 \alias{dbQuoteIdentifier,SnowflakeConnection,character-method}
@@ -78,6 +80,10 @@
 )
 
 \S4method{dbCreateTable}{SnowflakeConnection,character}(conn, name, fields, ..., row.names = NULL, temporary = FALSE)
+
+\S4method{dbAppendTable}{SnowflakeConnection,Id}(conn, name, value, ..., row.names = NULL)
+
+\S4method{dbCreateTable}{SnowflakeConnection,Id}(conn, name, fields, ..., row.names = NULL, temporary = FALSE)
 
 \S4method{dbAppendTable}{SnowflakeConnection,character}(conn, name, value, ..., row.names = NULL)
 
@@ -174,4 +180,44 @@ Created by \code{\link[DBI:dbConnect]{DBI::dbConnect()}} with a \code{\link[=Sno
 \item{\code{.state}}{Environment holding mutable state (valid, in_transaction,
 session_info, and the live auth token cache -- token, token_mtime).}
 }}
+
+\section{Writing data frames}{
+
+\code{dbWriteTable()} and \code{dbAppendTable()} send rows as batched \code{INSERT}
+statements. A batch holds at most \code{options(skiLift.insert_batch_size)} rows and
+\code{options(skiLift.insert_batch_bytes)} bytes of SQL, whichever is reached first
+(see \link{skiLift-options}).
+
+\strong{A write is not atomic.} Each batch commits on its own, so if batch 7 of 10
+fails, batches 1 to 6 stay in the table (and \code{dbWriteTable()} has already
+created the table). The error, of class \code{skilift_error_write}, says how many
+rows were committed, which rows were in the failed batch, and whether that
+batch may have been committed too (\code{outcome}); see \link{skilift-errors}. A batch
+that is sent again after a temporary failure carries the same request id, so
+Snowflake does not run it twice.
+}
+
+\section{Transactions}{
+
+skiLift does not support transactions. \code{dbBegin()}, \code{dbCommit()},
+\code{dbRollback()} and \code{dbWithTransaction()} raise an error of class
+\code{skilift_error_config}. Each statement is sent to the Snowflake SQL API on its
+own and committed as it runs, so there is nothing for a \code{BEGIN} to hold open.
+To make changes that must all succeed or all fail, send them as one
+Snowflake Scripting block:
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{dbExecute(con, "EXECUTE IMMEDIATE $$
+  BEGIN
+    BEGIN TRANSACTION;
+    INSERT INTO t VALUES (1);
+    INSERT INTO t VALUES (2);
+    COMMIT;
+  END
+$$")
+}\if{html}{\out{</div>}}
+
+If a statement in the block fails, the block fails and nothing is committed.
+Writes with \code{dbWriteTable()} and \code{dbAppendTable()} are sent in batches, each
+committed on its own, so they are not atomic either; see \code{?dbWriteTable}.
+}
 

@@ -148,7 +148,7 @@ setMethod("dbGetInfo", "SnowflakeConnection", function(dbObj, ...) {
   list(
     dbname    = dbObj@database,
     username  = dbObj@user,
-    host      = paste0(dbObj@account, ".snowflakecomputing.com"),
+    host      = .sf_hostname(dbObj@account),
     port      = 443L,
     schema    = dbObj@schema,
     warehouse = dbObj@warehouse,
@@ -601,6 +601,19 @@ setMethod("dbReadTable", signature("SnowflakeConnection", "character"),
 #' @param field.types Named character vector of Snowflake column types that
 #'   replace the types skiLift would choose, for example
 #'   `c(id = "BIGINT", note = "VARCHAR(50)")`. Names must be columns of `value`.
+#' @section Writing data frames:
+#' `dbWriteTable()` and `dbAppendTable()` send rows as batched `INSERT`
+#' statements. A batch holds at most `options(skiLift.insert_batch_size)` rows and
+#' `options(skiLift.insert_batch_bytes)` bytes of SQL, whichever is reached first
+#' (see [skiLift-options]).
+#'
+#' **A write is not atomic.** Each batch commits on its own, so if batch 7 of 10
+#' fails, batches 1 to 6 stay in the table (and `dbWriteTable()` has already
+#' created the table). The error, of class `skilift_error_write`, says how many
+#' rows were committed, which rows were in the failed batch, and whether that
+#' batch may have been committed too (`outcome`); see [skilift-errors]. A batch
+#' that is sent again after a temporary failure carries the same request id, so
+#' Snowflake does not run it twice.
 #' @export
 setMethod("dbWriteTable",
   signature("SnowflakeConnection", "character", "data.frame"),
@@ -664,6 +677,29 @@ setMethod("dbCreateTable",
                    paste(col_defs, collapse = ",\n  "), "\n)")
     dbExecute(conn, ddl)
     invisible(TRUE)
+  }
+)
+
+# A table given as DBI::Id(...) is the standard DBI way to name one in a schema.
+# Without these two methods it fell through to DBI's generic versions: for
+# dbAppendTable that is a multi-row parameter bind, which skiLift does not
+# support, so the call failed. Quote the Id and use the character methods.
+#' @rdname SnowflakeConnection-class
+#' @export
+setMethod("dbAppendTable",
+  signature("SnowflakeConnection", "Id"),
+  function(conn, name, value, ..., row.names = NULL) {
+    dbAppendTable(conn, dbQuoteIdentifier(conn, name), value, ..., row.names = row.names)
+  }
+)
+
+#' @rdname SnowflakeConnection-class
+#' @export
+setMethod("dbCreateTable",
+  signature("SnowflakeConnection", "Id"),
+  function(conn, name, fields, ..., row.names = NULL, temporary = FALSE) {
+    dbCreateTable(conn, dbQuoteIdentifier(conn, name), fields, ...,
+                  row.names = row.names, temporary = temporary)
   }
 )
 
@@ -960,17 +996,32 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
   .adbc_write_table(adbc, plain_name, df, mode = "append")
 }
 
-#' Legacy INSERT path: inline SQL string literals
+#' Insert rows as batched INSERT statements with inline SQL string literals
 #'
-#' Uses ADBC when available (avoids REST API on public endpoint).
+#' A batch ends when it reaches `skiLift.insert_batch_size` rows or
+#' `skiLift.insert_batch_bytes` bytes of SQL, whichever comes first. The byte
+#' limit is the one that matters for wide rows or long text: Snowflake advises
+#' keeping a request near 1 MB, and the row limit alone let one request grow to
+#' many megabytes. (Snowflake allows up to 200,000 rows in one INSERT ... VALUES,
+#' so the row count is not the constraint; 16,384 is only a convenient chunk.)
+#'
+#' Each batch is its own statement and commits on its own, so a failure leaves
+#' the earlier batches in the table. The error says how many rows are in, and
+#' whether the failed batch may have committed too (see `.abort_write()`).
 #' @noRd
 .insert_data_literal <- function(conn, table_id, df) {
-  batch_size <- getOption("skiLift.insert_batch_size", 5000L)
-  batch_size <- as.integer(batch_size)
+  batch_size  <- as.integer(getOption("skiLift.insert_batch_size", 5000L))
+  byte_budget <- getOption("skiLift.insert_batch_bytes", 1e6)
   n <- nrow(df)
   ncols <- ncol(df)
 
   adbc <- .ensure_adbc(conn)
+  # main still writes through ADBC when it is installed; otherwise REST
+  send <- if (!is.null(adbc)) {
+    function(sql) .adbc_execute_sql(adbc, sql)
+  } else {
+    function(sql) sf_api_submit(conn, sql)
+  }
 
   col_clause <- paste0(
     " (",
@@ -979,6 +1030,8 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
     }, character(1)), collapse = ", "),
     ")"
   )
+  header <- paste0("INSERT INTO ", table_id, col_clause, " VALUES\n")
+  room <- byte_budget - nchar(header, type = "bytes")
 
   use_progress <- n > batch_size && requireNamespace("cli", quietly = TRUE)
   if (use_progress) {
@@ -987,6 +1040,9 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
       format  = "Inserting rows {cli::pb_current}/{cli::pb_total} {cli::pb_bar} {cli::pb_percent}"
     )
   }
+
+  rows_committed <- 0L
+  batches_committed <- 0L
 
   for (start in seq(1L, n, by = batch_size)) {
     end <- min(start + batch_size - 1L, n)
@@ -997,21 +1053,100 @@ setMethod("dbDataType", "SnowflakeConnection", function(dbObj, obj, ...) {
       paste0("(", paste(vals, collapse = ", "), ")")
     }, character(1))
 
-    sql <- paste0(
-      "INSERT INTO ", table_id, col_clause, " VALUES\n",
-      paste(rows, collapse = ",\n")
-    )
-
-    if (!is.null(adbc)) {
-      .adbc_execute_sql(adbc, sql)
-    } else {
-      sf_api_submit(conn, sql)
+    # +2 for the ",\n" that joins rows
+    sizes <- nchar(rows, type = "bytes") + 2L
+    too_big <- which(sizes > room)
+    if (length(too_big) > 0L) {
+      row <- start + too_big[[1L]] - 1L
+      .sf_abort(
+        c(
+          "x" = "Row {row} is too large to send: {format(sizes[[too_big[[1L]]]], big.mark = ',')} bytes of SQL against a limit of {format(byte_budget, big.mark = ',', scientific = FALSE)}.",
+          "i" = "{rows_committed} of {n} rows were committed before this row.",
+          "i" = "Raise {.code options(skiLift.insert_batch_bytes)} if Snowflake accepts more, or load very large values another way (a stage)."
+        ),
+        class = c("skilift_error_write", "skilift_error_config"),
+        outcome = "not_executed", rows_committed = rows_committed,
+        batches_committed = batches_committed, total_rows = n,
+        failed_batch = list(index = batches_committed + 1L, first_row = row, n_rows = 1L),
+        call = NULL
+      )
     }
 
-    if (use_progress) cli::cli_progress_update(set = end, id = pb)
+    for (group in split(seq_along(rows), .pack_by_bytes(sizes, room))) {
+      sql <- paste0(header, paste(rows[group], collapse = ",\n"))
+      first_row <- start + group[[1L]] - 1L
+      tryCatch(
+        send(sql),
+        error = function(e) {
+          .abort_write(e, table_id, n, rows_committed, batches_committed,
+                       first_row, length(group))
+        }
+      )
+      rows_committed <- rows_committed + length(group)
+      batches_committed <- batches_committed + 1L
+      if (use_progress) cli::cli_progress_update(set = rows_committed, id = pb)
+    }
   }
 
   if (use_progress) cli::cli_progress_done(id = pb)
+}
+
+#' Group consecutive rows into batches that stay within a byte budget
+#' @param sizes Bytes per row.
+#' @returns An integer batch number for each row.
+#' @noRd
+.pack_by_bytes <- function(sizes, budget) {
+  batch <- integer(length(sizes))
+  current <- 1L
+  used <- 0
+  for (i in seq_along(sizes)) {
+    if (used > 0 && used + sizes[[i]] > budget) {
+      current <- current + 1L
+      used <- 0
+    }
+    used <- used + sizes[[i]]
+    batch[[i]] <- current
+  }
+  batch
+}
+
+#' Raise the error for a batch that failed, saying what is and is not in the table
+#'
+#' `outcome` is what the caller needs to know before running the write again:
+#' - "failed": Snowflake ran the statement and it failed (a SQL error), so the
+#'   batch is not in the table;
+#' - "not_executed": rejected before it ran (bad credentials, not allowed);
+#' - "unknown": the retries ran out or the request timed out, so the batch may
+#'   have committed. Use `request_id` and the statement history to find out
+#'   before running the write again.
+#' @noRd
+.abort_write <- function(e, table_id, total_rows, rows_committed,
+                         batches_committed, first_row, n_rows) {
+  outcome <- if (inherits(e, "skilift_error_sql")) {
+    "failed"
+  } else if (inherits(e, c("skilift_error_auth", "skilift_error_forbidden", "skilift_error_config"))) {
+    "not_executed"
+  } else {
+    "unknown"
+  }
+  what <- switch(outcome,
+    failed = "The failed batch is not in the table.",
+    not_executed = "The failed batch was rejected before it ran, so it is not in the table.",
+    unknown = "The failed batch may or may not have been committed. Check with the request id before writing again, or the rows may be duplicated."
+  )
+  .sf_abort(
+    c(
+      "x" = "Writing to {table_id} stopped: {rows_committed} of {total_rows} rows were committed.",
+      "i" = "The failed batch is rows {first_row} to {first_row + n_rows - 1L}. {what}",
+      "i" = "Writes are not atomic: each batch commits on its own. skiLift has no transactions; see {.code ?dbBegin}."
+    ),
+    class = "skilift_error_write",
+    outcome = outcome, rows_committed = rows_committed,
+    batches_committed = batches_committed, total_rows = total_rows,
+    failed_batch = list(index = batches_committed + 1L, first_row = first_row, n_rows = n_rows),
+    statement_handle = e$statement_handle, request_id = e$request_id,
+    parent = e, call = NULL
+  )
 }
 
 #' Column types for CREATE TABLE: skiLift's choice, overridden by `field.types`

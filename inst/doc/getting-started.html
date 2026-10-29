@@ -581,6 +581,19 @@ ADBC when available, which outperforms literal INSERT for datasets above
 <span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a></span>
 <span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="co"># Adjust the threshold (cells = rows * cols)</span></span>
 <span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a><span class="fu">options</span>(<span class="at">skiLift.bulk_write_threshold =</span> <span class="dv">100000</span><span class="dt">L</span>)</span></code></pre></div>
+<p>Whichever method is used, a write is sent in batches. With the REST
+path (literal <code>INSERT</code>), each statement holds at most
+<code>skiLift.insert_batch_size</code> rows and
+<code>skiLift.insert_batch_bytes</code> bytes of SQL (about 1 MB),
+whichever is reached first. Every batch commits on its own, so <strong>a
+failed write is not rolled back</strong>: if batch 7 of 10 fails,
+batches 1 to 6 are in the table. The error says how many rows were
+committed, and whether the failed batch may have been committed too
+(<code>?&quot;skilift-errors&quot;</code>). Over REST, a batch that has to be sent
+again carries the same request id, so Snowflake does not run it twice.
+skiLift does not support transactions; to make changes succeed or fail
+together, send them as one Snowflake Scripting block (see
+<code>?dbBegin</code>).</p>
 </div>
 </div>
 <div id="identifier-case-handling" class="section level2">
@@ -831,15 +844,26 @@ and ARRAY columns:</p>
 </div>
 <div id="transactions" class="section level2">
 <h2>Transactions</h2>
-<p><strong>Note:</strong> The Snowflake SQL API v2 is stateless
-per-request and does not currently support session-based transactions.
-Calling <code>dbBegin()</code> will raise an informative error.
-Session-based transaction support is planned for a future release that
-uses the internal Snowflake protocol.</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="co"># Not yet supported via SQL API v2 -- included for reference:</span></span>
-<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a><span class="fu">dbBegin</span>(con)</span>
-<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">&quot;INSERT INTO accounts VALUES (1, 100.00)&quot;</span>)</span>
-<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a><span class="fu">dbCommit</span>(con)</span></code></pre></div>
+<p>skiLift does not support transactions. <code>dbBegin()</code>,
+<code>dbCommit()</code>, <code>dbRollback()</code> and
+<code>dbWithTransaction()</code> raise an error. The Snowflake SQL API
+takes one statement per request and commits each one as it runs, so
+there is nothing for a <code>BEGIN</code> to hold open.</p>
+<p>To make changes that must all succeed or all fail, send them to
+Snowflake as one Snowflake Scripting block. If any statement in the
+block fails, nothing is committed:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">&quot;EXECUTE IMMEDIATE $$</span></span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a><span class="st">  BEGIN</span></span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a><span class="st">    BEGIN TRANSACTION;</span></span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a><span class="st">    INSERT INTO accounts VALUES (1, 100.00);</span></span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a><span class="st">    UPDATE balances SET total = total + 100.00;</span></span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a><span class="st">    COMMIT;</span></span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a><span class="st">  END</span></span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a><span class="st">$$&quot;</span>)</span></code></pre></div>
+<p>Writes with <code>dbWriteTable()</code> and
+<code>dbAppendTable()</code> are sent in batches that commit one at a
+time, so they are not atomic either (see “Writing Larger Data”
+above).</p>
 </div>
 <div id="disconnecting" class="section level2">
 <h2>Disconnecting</h2>
