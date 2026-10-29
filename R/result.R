@@ -96,18 +96,27 @@ setMethod("dbFetch", signature("SnowflakeResult"),
     meta <- .get_meta(res)
     resp_body <- .get_resp_body(res)
     total_partitions <- max(meta$num_partitions, 1L)
+    if (is.infinite(n)) n <- -1
 
-    if (st$fetched && st$current_partition >= total_partitions) {
+    # `st$buffer` holds rows already downloaded but not yet returned, and
+    # `st$current_partition` is the next partition to download (0 = none yet;
+    # the first partition arrives with the statement response itself).
+    # Without the buffer, asking for n rows from a partition of more than n
+    # discarded the rest of it -- a loop of dbFetch(res, n = 1000) silently
+    # lost every row after the first 1000.
+    buffered <- st$buffer
+    has_buffer <- !is.null(buffered) && nrow(buffered) > 0L
+
+    if (st$fetched && st$current_partition >= total_partitions && !has_buffer) {
       return(.empty_df_from_meta(meta))
     }
 
-    all_parts <- list()
-    start_part <- if (st$fetched) st$current_partition else 0L
-
     if (n < 0) {
+      parts <- if (has_buffer) list(buffered) else list()
+      start_part <- if (st$fetched) st$current_partition else 0L
+
       if (start_part == 0L) {
-        parsed <- sf_parse_response(resp_body, inherit = meta)
-        all_parts[[1L]] <- parsed$data
+        parts <- c(parts, list(sf_parse_response(resp_body, inherit = meta)$data))
         start_part <- 1L
       }
 
@@ -116,41 +125,60 @@ setMethod("dbFetch", signature("SnowflakeResult"),
         use_parallel <- isTRUE(getOption("skiLift.parallel_fetch", TRUE)) &&
                         length(remaining) > 1L
 
-        if (use_parallel) {
-          rest <- sf_fetch_partitions_parallel(
+        rest <- if (use_parallel) {
+          sf_fetch_partitions_parallel(
             res@connection, meta$statement_handle, remaining, meta
           )
         } else {
-          rest <- .fetch_partitions_sequential(
+          .fetch_partitions_sequential(
             res@connection, meta$statement_handle, remaining, meta
           )
         }
-        all_parts <- c(all_parts, rest)
+        parts <- c(parts, rest)
       }
 
+      st$buffer <- NULL
       st$fetched <- TRUE
       st$current_partition <- total_partitions
 
-      if (length(all_parts) == 0L) return(.empty_df_from_meta(meta))
-      df <- if (length(all_parts) == 1L) all_parts[[1L]] else do.call(rbind, all_parts)
+      if (length(parts) == 0L) return(.empty_df_from_meta(meta))
+      df <- if (length(parts) == 1L) parts[[1L]] else do.call(rbind, parts)
       st$rows_fetched <- st$rows_fetched + nrow(df)
       return(df)
     }
 
+    # Up to n rows: top the buffer up one partition at a time.
     if (!st$fetched) {
-      parsed <- sf_parse_response(resp_body, inherit = meta)
+      buffered <- sf_parse_response(resp_body, inherit = meta)$data
       st$fetched <- TRUE
       st$current_partition <- 1L
-
-      df <- parsed$data
-      if (n > 0 && nrow(df) > n) {
-        df <- df[seq_len(n), , drop = FALSE]
-      }
-      st$rows_fetched <- st$rows_fetched + nrow(df)
-      return(df)
+    } else if (!has_buffer) {
+      buffered <- NULL
+    }
+    while ((is.null(buffered) || nrow(buffered) < n) &&
+             st$current_partition < total_partitions) {
+      nxt <- .fetch_partitions_sequential(
+        res@connection, meta$statement_handle, st$current_partition, meta
+      )[[1L]]
+      st$current_partition <- st$current_partition + 1L
+      buffered <- if (is.null(buffered)) nxt else rbind(buffered, nxt)
     }
 
-    .empty_df_from_meta(meta)
+    if (is.null(buffered)) return(.empty_df_from_meta(meta))
+    take <- min(n, nrow(buffered))
+    df <- buffered[seq_len(take), , drop = FALSE]
+    rownames(df) <- NULL
+    st$buffer <- if (take < nrow(buffered)) {
+      # Not buffered[-seq_len(take), ]: with take == 0 that is x[-integer(0), ],
+      # which selects nothing.
+      rest <- buffered[seq_len(nrow(buffered)) > take, , drop = FALSE]
+      rownames(rest) <- NULL
+      rest
+    } else {
+      NULL
+    }
+    st$rows_fetched <- st$rows_fetched + nrow(df)
+    df
   }
 )
 
@@ -160,9 +188,13 @@ setMethod("dbHasCompleted", "SnowflakeResult", function(res, ...) {
   st <- res@.state
   if (!st$valid) return(TRUE)
   if (isTRUE(st$pending)) return(FALSE)
+  # A statement (INSERT, CREATE, ...) has no rows to fetch: it is complete as
+  # soon as it has run. Only a query (rows_affected == -1) can have more rows.
+  if (st$rows_affected != -1L) return(TRUE)
   meta <- .get_meta(res)
   total_partitions <- max(meta$num_partitions, 1L)
-  st$fetched && st$current_partition >= total_partitions
+  no_buffered_rows <- is.null(st$buffer) || nrow(st$buffer) == 0L
+  st$fetched && st$current_partition >= total_partitions && no_buffered_rows
 })
 
 #' @rdname SnowflakeResult-class
@@ -218,7 +250,8 @@ setMethod("dbGetRowCount", "SnowflakeResult", function(res, ...) {
 #' @rdname SnowflakeResult-class
 #' @export
 setMethod("dbGetRowsAffected", "SnowflakeResult", function(res, ...) {
-  res@.state$rows_affected
+  # Internally -1 marks "this was a query"; DBI says a query affects 0 rows.
+  max(res@.state$rows_affected, 0L)
 })
 
 #' @rdname SnowflakeResult-class
@@ -271,6 +304,7 @@ setMethod("dbBind", "SnowflakeResult",
     st$fetched <- FALSE
     st$current_partition <- 0L
     st$rows_fetched <- 0L
+    st$buffer <- NULL
     st$rows_affected <- .extract_rows_affected(resp)
 
     st$resp_body <- resp

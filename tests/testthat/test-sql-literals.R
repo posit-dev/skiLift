@@ -139,3 +139,12 @@ test_that("field.types is matched like the column names are, and a typo is an er
   expect_error(.field_types_for(df, c(idd = "BIGINT")), "does not have")
   expect_error(.field_types_for(df, c("BIGINT")), "named character vector")
 })
+
+
+test_that("quoting zero strings gives zero strings, not an empty-string literal", {
+  con <- new("SnowflakeConnection", account = "a", user = "u", database = "", schema = "",
+             warehouse = "", role = "", .auth = list(), .state = .new_conn_state())
+  expect_length(dbQuoteString(con, character()), 0L)
+  expect_length(dbQuoteLiteral(con, character()), 0L)
+  expect_equal(as.character(dbQuoteString(con, c("a", NA))), c("'a'", "NULL"))
+})

@@ -712,6 +712,10 @@ setMethod("dbQuoteIdentifier", signature("SnowflakeConnection", "character"),
 #' @export
 setMethod("dbQuoteString", signature("SnowflakeConnection", "character"),
   function(conn, x, ...) {
+    # paste0("'", character(0), "'") is "''", not character(0): R treats a
+    # zero-length argument as "". So an empty input must be returned early, or
+    # `WHERE x IN (<nothing>)` would silently become `IN ('')`.
+    if (!length(x)) return(SQL(character()))
     is_na <- is.na(x)
     x <- .escape_sql_string(x)
     x <- paste0("'", x, "'")

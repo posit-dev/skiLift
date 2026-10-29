@@ -73,6 +73,24 @@
 
 ## Bug Fixes
 
+* **`dbFetch(res, n = k)` silently dropped rows when a result was fetched in
+  pieces; it is fixed. If you have processed a result in chunks with an earlier
+  version (including `RSnowflake`), check it.** A loop such as
+  `while (!dbHasCompleted(res)) dbFetch(res, n = 1000)` returned the first
+  1,000 rows and then nothing: the rest of the first block of rows Snowflake
+  sent was thrown away, and later blocks were never read. No error or warning
+  was given, and `dbHasCompleted()` reported the result complete. For example,
+  fetching a 10-row result 3 rows at a time returned rows 1 to 3 only. Fetching
+  everything at once (`dbGetQuery()`, `dbFetch(res)`, `collect()`) was not
+  affected. Each call now returns exactly the next `n` rows, in order, and reads
+  further blocks only when it needs them.
+
+* **Smaller fixes found by running the DBI conformance tests:**
+  `dbQuoteString()` of zero strings returned `''` (an empty-string literal)
+  instead of nothing, so an empty `IN ()` list could become `IN ('')`;
+  `dbHasCompleted()` is now `TRUE` for a statement that has run;
+  `dbGetRowsAffected()` is `0` for a query, as DBI specifies, not `-1`.
+
 * **Binary data written with `dbWriteTable()` could be stored as text, and
   `field.types` was silently ignored; both are fixed. If you have written a
   list of raw vectors with an earlier version (including `RSnowflake`), check

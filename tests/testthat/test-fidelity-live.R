@@ -251,3 +251,28 @@ test_that("field.types is honoured, and a column the table already has keeps its
   expect_equal(as.numeric(ty$s), c(0, NA, 0))
   expect_error(DBI::dbWriteTable(con, tbl_id("T_FT2"), df, field.types = c(nope = "BIGINT")), "does not have")
 })
+
+test_that("egress: fetching a result in pieces loses and repeats no row", {
+  # Found 21 Oct 2026: dbFetch(res, n = k) kept k rows and dropped the rest of
+  # the partition, so a chunked loop silently lost most of a large result. The
+  # 300,000 rows are enough for Snowflake to return several partitions.
+  sql <- "SELECT SEQ8() AS n FROM TABLE(GENERATOR(ROWCOUNT => 300000)) ORDER BY n"
+
+  res <- DBI::dbSendQuery(con, sql)
+  chunks <- list()
+  guard <- 0L
+  while (!DBI::dbHasCompleted(res) && (guard <- guard + 1L) < 50L) {
+    chunks[[length(chunks) + 1L]] <- DBI::dbFetch(res, n = 70000L)
+  }
+  DBI::dbClearResult(res)
+  got <- as.numeric(unlist(lapply(chunks, function(d) d[[1L]])))
+  expect_identical(got, as.numeric(0:299999))
+  expect_true(all(vapply(chunks, nrow, 1L) <= 70000L))
+
+  # A few rows, then the rest.
+  res <- DBI::dbSendQuery(con, sql)
+  head3 <- DBI::dbFetch(res, n = 3L)
+  rest <- DBI::dbFetch(res, n = -1)
+  DBI::dbClearResult(res)
+  expect_identical(as.numeric(c(head3[[1L]], rest[[1L]])), as.numeric(0:299999))
+})
