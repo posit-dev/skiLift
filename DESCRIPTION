@@ -1,6 +1,6 @@
 Package: skiLift
 Title: DBI Interface to 'Snowflake'
-Version: 0.2.1
+Version: 0.2.1.9000
 Authors@R: c(
     person("Simon", "Field", email = "simon@hexfield.ai", role = c("aut", "cre")),
     person("Snowflake Inc.", role = "cph"),
